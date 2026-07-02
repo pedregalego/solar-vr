@@ -26,11 +26,12 @@ como APK Android gerado pelo PWABuilder. Otimizado para o suporte de celular
 | Desacelerar | D-pad ↓ / → | Setas ↓ / ← |
 | Diminuir / Aumentar IPD | L / R | Slider "AJUSTAR OLHOS" |
 | Reiniciar câmera | Start | R |
-| Disparar / Selecionar na mira | Gatilho (6/7) | Clique do mouse |
+| Disparar / Selecionar na mira | Gatilho (calibrado no 1º toque) | Clique do mouse |
+| Mover o olhar / mira | Joystick analógico | Arrastar na tela |
 
 Toque em um planeta ou lua para abrir a ficha técnica. Toque em área vazia (ou
-Esc) para fechar. Arraste na tela para olhar ao redor (±35°, mantendo o Sol
-visível).
+Esc) para fechar. Arraste na tela, mova o joystick ou gire a cabeça para
+olhar ao redor em **360°**.
 
 ## 🚀 Teste local
 

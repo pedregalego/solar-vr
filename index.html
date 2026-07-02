@@ -593,14 +593,17 @@ const estado = {
   yawArraste: 0, pitchArraste: 0,       // toque/arrasto
   yawGiro: 0, pitchGiro: 0,             // giroscópio
   giroAtivo: false, refAlpha: null, refGamma: null, refBeta: null,
+  alphaAnterior: null,
   vr: false, ipdMm: 60,
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
   alvoOlhar: new THREE.Vector3(0,0,0),  // suavizado
   posCamera: new THREE.Vector3(46,14,0)
 };
-const LIMITE_ANGULO = THREE.MathUtils.degToRad(35); // ±35° (Sol sempre visível)
-const clampe = v => THREE.MathUtils.clamp(v, -LIMITE_ANGULO, LIMITE_ANGULO);
+// Olhar livre 360°: yaw (horizontal) sem limite — imersão total.
+// Apenas o pitch (vertical) é limitado a ±85° para evitar cambalhota.
+const LIMITE_PITCH = THREE.MathUtils.degToRad(85);
+const clampePitch = v => THREE.MathUtils.clamp(v, -LIMITE_PITCH, LIMITE_PITCH);
 
 /* ============================================================
    8. ÁUDIO SINTETIZADO (Web Audio API)
@@ -719,8 +722,8 @@ renderer.domElement.addEventListener('pointermove', e => {
   if (!ptrAtivo) return;
   const dx = e.clientX - ptrX, dy = e.clientY - ptrY;
   if (Math.abs(dx) + Math.abs(dy) > 6) ptrMoveu = true;
-  estado.yawArraste  = clampe(estado.yawArraste  - dx * 0.0032);
-  estado.pitchArraste = clampe(estado.pitchArraste - dy * 0.0032);
+  estado.yawArraste  -= dx * 0.0032;
+  estado.pitchArraste = clampePitch(estado.pitchArraste - dy * 0.0032);
   ptrX = e.clientX; ptrY = e.clientY;
 });
 addEventListener('pointerup', e => {
@@ -746,17 +749,19 @@ function aoGirar(e){
   estado.giroAtivo = true;
   if (estado.refAlpha === null){
     estado.refAlpha = e.alpha; estado.refGamma = e.gamma; estado.refBeta = e.beta;
+    estado.alphaAnterior = e.alpha;
   }
-  // Yaw: rotação da bússola relativa à referência
-  let dA = e.alpha - estado.refAlpha;
-  if (dA > 180) dA -= 360; if (dA < -180) dA += 360;
-  estado.yawGiro = clampe(THREE.MathUtils.degToRad(dA));
+  // Yaw acumulativo: gira 360° contínuo sem salto ao cruzar o norte
+  let d = e.alpha - estado.alphaAnterior;
+  if (d > 180) d -= 360; if (d < -180) d += 360;
+  estado.yawGiro += THREE.MathUtils.degToRad(d);
+  estado.alphaAnterior = e.alpha;
   // Pitch: depende da orientação da tela (paisagem usa gamma)
   const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
   let dP;
   if (Math.abs(ang) === 90) dP = (e.gamma - estado.refGamma) * (ang === 90 ? 1 : -1);
   else                      dP = (e.beta - estado.refBeta);
-  estado.pitchGiro = clampe(THREE.MathUtils.degToRad(dP || 0));
+  estado.pitchGiro = clampePitch(THREE.MathUtils.degToRad(dP || 0));
 }
 async function ativarGiroscopio(){
   try{
@@ -795,7 +800,7 @@ addEventListener('keydown', e => {
 function reiniciarCamera(){
   estado.yawArraste = 0; estado.pitchArraste = 0;
   estado.yawGiro = 0; estado.pitchGiro = 0;
-  estado.refAlpha = null; // recentraliza giroscópio
+  estado.refAlpha = null; estado.alphaAnterior = null; // recentraliza giroscópio
   estado.velocidade = 1; estado.direcao = 1; estado.pausado = false;
   limparSelecao();
   atualizarHUD();
@@ -804,16 +809,22 @@ function reiniciarCamera(){
 /* ============================================================
    14. GAMEPAD — SHINECON SC-BC03 (mapeamento completo)
    ------------------------------------------------------------
-   A(0)/B(1)  pausar · X(2)/Y(3) inverter · L(4)/R(5) IPD
-   Gatilho(6/7) disparo · Start(9) reiniciar
-   D-pad cima/esq: acelerar · baixo/dir: desacelerar
+   O gatilho varia de índice conforme o lote/modo do controle,
+   então o app CALIBRA: o primeiro botão apertado após conectar
+   vira o botão de disparo. Os demais mantêm o mapeamento padrão:
+   A(0)/B(1) pausar · X(2)/Y(3) inverter · L(4)/R(5) IPD
+   Start(9) reiniciar · D-pad ↑/←: acelerar · ↓/→: desacelerar
+   Joystick analógico: move o olhar/mira (navegação 360°)
    ============================================================ */
 let botoesAnteriores = [];
 let gamepadConectado = null;
+let indiceGatilho = null;       // definido pela calibração
+let calibrandoGatilho = false;
 
 addEventListener('gamepadconnected', e => {
   gamepadConectado = e.gamepad.id;
-  avisar('🎮 Controle detectado: ' + e.gamepad.id.slice(0, 30));
+  calibrandoGatilho = true;
+  avisar('🎮 Controle detectado! Aperte o GATILHO uma vez para calibrar o disparo.');
   atualizarHUD();
 });
 addEventListener('gamepaddisconnected', () => {
@@ -826,26 +837,62 @@ function lerGamepad(){
   let gp = null;
   for (const g of gps){ if (g && g.connected){ gp = g; break; } }
   if (!gp) return;
-  if (!gamepadConectado){ gamepadConectado = gp.id; atualizarHUD(); }
+  if (!gamepadConectado){
+    gamepadConectado = gp.id;
+    calibrandoGatilho = true;
+    avisar('🎮 Controle detectado! Aperte o GATILHO uma vez para calibrar o disparo.');
+    atualizarHUD();
+  }
 
   const apertou = i =>
     gp.buttons[i] && gp.buttons[i].pressed && !botoesAnteriores[i];
 
-  if (apertou(0) || apertou(1)) estado.pausado = !estado.pausado;      // A/B
-  if (apertou(2) || apertou(3)) estado.direcao *= -1;                  // X/Y
-  if (apertou(4)) ajustarIPD(estado.ipdMm - 1);                        // L
-  if (apertou(5)) ajustarIPD(estado.ipdMm + 1);                        // R
-  if (apertou(6) || apertou(7)) disparar();                            // gatilho
-  if (apertou(9)) reiniciarCamera();                                   // Start
-  if (apertou(12) || apertou(14))                                      // ↑ / ←
+  // --- Calibração: o primeiro botão pressionado vira o gatilho ---
+  if (calibrandoGatilho){
+    for (let i = 0; i < gp.buttons.length; i++){
+      if (apertou(i)){
+        indiceGatilho = i;
+        calibrandoGatilho = false;
+        avisar('🔫 Gatilho calibrado (botão ' + i + ')! Os demais botões seguem o padrão.');
+        disparar();
+        break;
+      }
+    }
+    botoesAnteriores = gp.buttons.map(b => b.pressed);
+    return;
+  }
+
+  // Disparo: botão calibrado (ou 6/7 como reserva)
+  const eGatilho = i => (indiceGatilho !== null ? i === indiceGatilho
+                                                : (i === 6 || i === 7));
+  // Botões "livres": pressionados e que não são o gatilho
+  const livre = i => apertou(i) && !eGatilho(i);
+
+  for (let i = 0; i < gp.buttons.length; i++){
+    if (eGatilho(i) && apertou(i)) disparar();
+  }
+  if (livre(0) || livre(1)) estado.pausado = !estado.pausado;   // A/B
+  if (livre(2) || livre(3)) estado.direcao *= -1;               // X/Y
+  if (livre(4)) ajustarIPD(estado.ipdMm - 1);                   // L
+  if (livre(5)) ajustarIPD(estado.ipdMm + 1);                   // R
+  if (livre(9)) reiniciarCamera();                              // Start
+  if (livre(12) || livre(14))                                   // ↑ / ←
     estado.velocidade = Math.min(5, estado.velocidade + .1);
-  if (apertou(13) || apertou(15))                                      // ↓ / →
+  if (livre(13) || livre(15))                                   // ↓ / →
     estado.velocidade = Math.max(.1, estado.velocidade - .1);
 
-  // Eixo analógico vertical controla velocidade continuamente
-  if (gp.axes.length > 1 && Math.abs(gp.axes[1]) > 0.25){
+  // --- Joystick analógico: move o olhar/mira (360°) ---
+  const zonaMorta = 0.22;
+  if (gp.axes.length >= 2){
+    const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
+    if (Math.abs(ax) > zonaMorta) estado.yawArraste -= ax * 0.045;
+    if (Math.abs(ay) > zonaMorta)
+      estado.pitchArraste = clampePitch(estado.pitchArraste - ay * 0.030);
+  }
+  // Segundo analógico (se existir): ajuste fino de velocidade
+  if (gp.axes.length >= 4 && Math.abs(gp.axes[3]) > 0.4){
     estado.velocidade = THREE.MathUtils.clamp(
-      estado.velocidade - gp.axes[1] * 0.02, .1, 5);
+      estado.velocidade - gp.axes[3] * 0.02, .1, 5);
   }
   botoesAnteriores = gp.buttons.map(b => b.pressed);
   atualizarHUD();
@@ -998,9 +1045,9 @@ function animar(){
   camera.position.copy(estado.posCamera);
   camera.lookAt(estado.alvoOlhar);
 
-  // Offsets de olhar (giro + arrasto), limitados a ±35°
-  camera.rotateY(clampe(estado.yawArraste + estado.yawGiro));
-  camera.rotateX(clampe(estado.pitchArraste + estado.pitchGiro));
+  // Offsets de olhar (giro + arrasto): 360° livre na horizontal
+  camera.rotateY(estado.yawArraste + estado.yawGiro);
+  camera.rotateX(clampePitch(estado.pitchArraste + estado.pitchGiro));
   camera.updateMatrixWorld();
 
   // --- Renderização (normal ou estéreo) ---
