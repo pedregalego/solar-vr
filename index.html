@@ -159,8 +159,9 @@ body.vr.retrato #girarTela{display:flex}
 
 <!-- Painel de ajuste de IPD -->
 <div id="painelIPD">
-  <label>DISTÂNCIA ENTRE OLHOS: <span id="txtIPD">64</span> mm</label>
-  <input type="range" id="sliderIPD" min="50" max="78" value="64" step="1">
+  <label>DISTÂNCIA ENTRE OLHOS: <span id="txtIPD">60</span> mm</label>
+  <div style="font-size:10px;opacity:.8;text-align:center">Diminua até as duas imagens<br>se unirem em uma só</div>
+  <input type="range" id="sliderIPD" min="50" max="78" value="60" step="1">
 </div>
 
 <!-- Modal ficha técnica -->
@@ -592,7 +593,7 @@ const estado = {
   yawArraste: 0, pitchArraste: 0,       // toque/arrasto
   yawGiro: 0, pitchGiro: 0,             // giroscópio
   giroAtivo: false, refAlpha: null, refGamma: null, refBeta: null,
-  vr: false, ipdMm: 64,
+  vr: false, ipdMm: 60,
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
   alvoOlhar: new THREE.Vector3(0,0,0),  // suavizado
@@ -1011,8 +1012,12 @@ function animar(){
 function renderizarEstereo(){
   const w = renderer.domElement.width / renderer.getPixelRatio();
   const h = renderer.domElement.height / renderer.getPixelRatio();
-  // Separação em unidades de mundo derivada do IPD em mm
-  const sep = (estado.ipdMm / 64) * 0.32;
+  // Paralaxe sutil entre os olhos no mundo virtual (profundidade 3D)
+  const sep = 0.3;
+  // CONVERGÊNCIA: aproxima os centros das duas imagens na tela para
+  // alinhá-los com as lentes do óculos (Shinecon SC-G04E).
+  // Slider menor = imagens mais próximas = corrige a visão dupla.
+  const conv = (78 - estado.ipdMm) * 0.02;
   _vDir.setFromMatrixColumn(camera.matrixWorld, 0); // eixo X local (direita)
 
   for (const [cam, lado] of [[camL, -1], [camR, 1]]){
@@ -1020,6 +1025,8 @@ function renderizarEstereo(){
     cam.position.addScaledVector(_vDir, lado * sep / 2);
     cam.aspect = (w / 2) / h;
     cam.updateProjectionMatrix();
+    // Desloca o frustum horizontalmente (olho esq. → direita; dir. → esquerda)
+    cam.projectionMatrix.elements[8] = lado * conv;
     cam.updateMatrixWorld();
   }
   renderer.setScissorTest(true);
