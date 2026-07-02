@@ -1,65 +1,53 @@
 {
-  "id": "/",
-  "name": "SolarVR - Sistema Solar Educativo",
+  "name": "SolarVR - Sistema Solar",
   "short_name": "SolarVR",
-  "description": "Tour educativo em VR pelo Sistema Solar — planetas, luas e fichas técnicas em estilo cyberpunk.",
+  "description": "Tour educativo em VR pelo Sistema Solar",
   "start_url": "/solar-vr/",
-  "display": "fullscreen",
-  "display_override": ["window-controls-overlay"],
+  "display": "standalone",
   "orientation": "landscape",
   "theme_color": "#02020a",
   "background_color": "#02020a",
-  "categories": ["education", "games", "vr"],
-  "iarc_rating_id": "",
-  "related_applications": [],
+  "categories": ["education", "games"],
   "icons": [
     {
       "src": "icons/icon-72.png",
       "sizes": "72x72",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-96.png",
       "sizes": "96x96",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-128.png",
       "sizes": "128x128",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-144.png",
       "sizes": "144x144",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-152.png",
       "sizes": "152x152",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-192.png",
       "sizes": "192x192",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-384.png",
       "sizes": "384x384",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     },
     {
       "src": "icons/icon-512.png",
       "sizes": "512x512",
-      "type": "image/png",
-      "purpose": "any"
+      "type": "image/png"
     }
   ]
 }
