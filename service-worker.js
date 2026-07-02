@@ -3,13 +3,17 @@
    Estratégia: cache-first para assets estáticos,
    com atualização automática em segundo plano.
    ============================================================ */
-const VERSAO_CACHE = 'solarvr-v1';
+const VERSAO_CACHE = 'solarvr-v2';
 
 // Assets locais + Three.js do CDN (para funcionar 100% offline)
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './icons/icon-192-maskable.png',
+  './icons/icon-512-maskable.png',
+  './screenshots/screenshot-wide.png',
+  './screenshots/screenshot-narrow.png',
   './icons/icon-72.png',
   './icons/icon-96.png',
   './icons/icon-128.png',
