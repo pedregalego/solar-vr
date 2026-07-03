@@ -694,9 +694,7 @@ const estado = {
   velocidade: 1, direcao: 1, pausado: false,
   anguloCamera: 0, raioCamera: 46, alturaCamera: 14,
   yawArraste: 0, pitchArraste: 0,       // toque/arrasto
-  yawGiro: 0, pitchGiro: 0,             // giroscópio
-  giroAtivo: false, refAlpha: null, refGamma: null, refBeta: null,
-  alphaAnterior: null,
+
   vr: false, ipdMm: 60,
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
@@ -848,7 +846,9 @@ function itensMenu(){
   itens.push({ rotulo: '🧭 EXPLORAÇÃO LIVRE',
     acao: () => { encerrarPasseio(); fecharMenu(); } });
   itens.push({ rotulo: '🎯 RECENTRALIZAR VISÃO',
-    acao: () => { reiniciarCamera(); fecharMenu(); } });
+    acao: () => { recentrarVisao(); fecharMenu(); } });
+  itens.push({ rotulo: '🔁 INVERTER SENTIDO',
+    acao: () => { estado.direcao *= -1; atualizarHUD(); fecharMenu(); } });
   itens.push({ rotulo: narracaoLigada ? '🔊 NARRAÇÃO: LIGADA' : '🔇 NARRAÇÃO: DESLIGADA',
     acao: () => { narracaoLigada = !narracaoLigada; if (!narracaoLigada) silenciar(); renderizarMenu(); } });
   if (estado.vr) itens.push({ rotulo: '👋 SAIR DO VR',
@@ -868,7 +868,7 @@ function renderizarMenu(){
     const b = document.createElement('button');
     b.textContent = item.rotulo;
     if (i === menu.indice) b.classList.add('ativo');
-    b.addEventListener('click', item.acao);
+    b.addEventListener('click', () => { if (podeAcionar()) item.acao(); });
     caixa.appendChild(b);
   });
 }
@@ -926,8 +926,19 @@ document.getElementById('btnIntroTela').addEventListener('click', () => {
   abrirMenu(); // escolher o modo
 });
 
-/* Ação do gatilho conforme o contexto atual */
+/* Ação do gatilho conforme o contexto atual.
+   Anti-duplo: controles Shinecon costumam enviar DOIS eventos por
+   aperto (botão de gamepad + clique/Enter sintético) — o segundo
+   desfazia o primeiro. Acionamentos em <350 ms são ignorados. */
+let ultimoAcionamento = 0;
+function podeAcionar(){
+  const agora = performance.now();
+  if (agora - ultimoAcionamento < 350) return false;
+  ultimoAcionamento = agora;
+  return true;
+}
 function acaoGatilho(){
+  if (!podeAcionar()) return;
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ menuConfirmar(); return; }
   if (estado.passeio.ativo){ proximaParada(); return; }
@@ -1121,6 +1132,7 @@ addEventListener('pointerup', e => {
   if (!ptrAtivo) return;
   ptrAtivo = false;
   if (ptrMoveu) return; // foi arrasto, não toque
+  if (!podeAcionar()) return; // anti-duplo (gatilho também gera clique)
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ if (estado.vr) menuConfirmar(); return; } // fora do VR o menu é DOM
   if (estado.passeio.ativo){ proximaParada(); return; } // toque avança o passeio
@@ -1138,24 +1150,31 @@ addEventListener('pointerup', e => {
 /* ============================================================
    12. GIROSCÓPIO (deviceorientation)
    ============================================================ */
+// Orientação por QUATERNION (método do Google Cardboard):
+// imune ao "gimbal lock" que fazia a imagem saltar e sumir
+// quando o celular passava perto da vertical.
+const _zee = new THREE.Vector3(0, 0, 1);
+const _eulerGiro = new THREE.Euler();
+const _qTela = new THREE.Quaternion();
+const _qMundo = new THREE.Quaternion(-Math.SQRT1_2, 0, 0, Math.SQRT1_2);
+const _qRel = new THREE.Quaternion();
+const quatDispositivo = new THREE.Quaternion();
+let quatReferencia = null;   // capturada ao recentralizar
+let temGiro = false;
+
 function aoGirar(e){
   if (e.alpha == null) return;
-  estado.giroAtivo = true;
-  if (estado.refAlpha === null){
-    estado.refAlpha = e.alpha; estado.refGamma = e.gamma; estado.refBeta = e.beta;
-    estado.alphaAnterior = e.alpha;
-  }
-  // Yaw acumulativo: gira 360° contínuo sem salto ao cruzar o norte
-  let d = e.alpha - estado.alphaAnterior;
-  if (d > 180) d -= 360; if (d < -180) d += 360;
-  estado.yawGiro += THREE.MathUtils.degToRad(d);
-  estado.alphaAnterior = e.alpha;
-  // Pitch: depende da orientação da tela (paisagem usa gamma)
-  const ang = (screen.orientation && screen.orientation.angle) || window.orientation || 0;
-  let dP;
-  if (Math.abs(ang) === 90) dP = (e.gamma - estado.refGamma) * (ang === 90 ? 1 : -1);
-  else                      dP = (e.beta - estado.refBeta);
-  estado.pitchGiro = clampePitch(THREE.MathUtils.degToRad(dP || 0));
+  temGiro = true;
+  const alpha = THREE.MathUtils.degToRad(e.alpha);
+  const beta  = THREE.MathUtils.degToRad(e.beta  || 0);
+  const gamma = THREE.MathUtils.degToRad(e.gamma || 0);
+  const orient = THREE.MathUtils.degToRad(
+    (screen.orientation && screen.orientation.angle) || window.orientation || 0);
+  _eulerGiro.set(beta, alpha, -gamma, 'YXZ');       // ordem do dispositivo
+  quatDispositivo.setFromEuler(_eulerGiro);
+  quatDispositivo.multiply(_qMundo);                 // câmera olha para trás do aparelho
+  quatDispositivo.multiply(_qTela.setFromAxisAngle(_zee, -orient)); // rotação da tela
+  if (!quatReferencia) quatReferencia = quatDispositivo.clone();
 }
 async function ativarGiroscopio(){
   try{
@@ -1187,7 +1206,9 @@ addEventListener('keydown', e => {
       (e.code === 'Enter' || e.code === 'Space')){ concluirCalibracao(); return; }
   switch (e.code){
     case 'KeyM': abrirMenu(); return;
-    case 'Space': case 'Enter':
+    case 'Enter': case 'NumpadEnter':
+      acaoGatilho(); return; // controles Shinecon em modo mouse enviam Enter
+    case 'Space':
       estado.pausado = !estado.pausado; break;
     case 'ArrowUp': case 'ArrowRight':
       estado.velocidade = Math.min(5, estado.velocidade + .1); break;
@@ -1203,14 +1224,13 @@ addEventListener('keydown', e => {
   atualizarHUD();
 });
 
-function reiniciarCamera(){
+function recentrarVisao(){
+  // Zera arrasto/joystick e captura a orientação atual como novo "centro"
   estado.yawArraste = 0; estado.pitchArraste = 0;
-  estado.yawGiro = 0; estado.pitchGiro = 0;
-  estado.refAlpha = null; estado.alphaAnterior = null; // recentraliza giroscópio
-  estado.velocidade = 1; estado.direcao = 1; estado.pausado = false;
-  limparSelecao();
-  atualizarHUD();
+  quatReferencia = temGiro ? quatDispositivo.clone() : null;
+  avisar('🎯 Visão recentralizada');
 }
+function reiniciarCamera(){ recentrarVisao(); limparSelecao(); }
 
 /* ============================================================
    14. GAMEPAD — SHINECON SC-BC03 (mapeamento completo)
@@ -1288,7 +1308,7 @@ function lerGamepad(){
     // --- Mapeamento normal ---
     const livre = i => apertou(i) && !eGatilho(i);
     if (livre(0) || livre(1)) estado.pausado = !estado.pausado;   // A/B
-    if (livre(2) || livre(3)) estado.direcao *= -1;               // X/Y
+    if (livre(2) || livre(3)) recentrarVisao();  // X/Y: recentralizar visão
     if (livre(12) || livre(14))                                   // ↑ / ←
       estado.velocidade = Math.min(5, estado.velocidade + .1);
     if (livre(13) || livre(15))                                   // ↓ / →
@@ -1318,7 +1338,7 @@ async function entrarVR(){
   document.body.classList.add('vr');
   reticulo3D.visible = true;
   legenda3D.visible = estado.passeio.ativo;
-  estado.refAlpha = null; // recentraliza olhar
+  quatReferencia = null; // recentraliza olhar
   await ativarGiroscopio();
   try{ await document.documentElement.requestFullscreen(); }
   catch(e){ /* fullscreen pode ser bloqueado — segue sem */ }
@@ -1479,9 +1499,14 @@ function animar(){
   camera.position.copy(estado.posCamera);
   camera.lookAt(estado.alvoOlhar);
 
-  // Offsets de olhar (giro + arrasto): 360° livre na horizontal
-  camera.rotateY(estado.yawArraste + estado.yawGiro);
-  camera.rotateX(clampePitch(estado.pitchArraste + estado.pitchGiro));
+  // Giroscópio: rotação RELATIVA à referência (quaternion, sem saltos)
+  if (temGiro && quatReferencia){
+    _qRel.copy(quatReferencia).invert().multiply(quatDispositivo);
+    camera.quaternion.multiply(_qRel);
+  }
+  // Arrasto/joystick por cima: 360° livre na horizontal
+  camera.rotateY(estado.yawArraste);
+  camera.rotateX(clampePitch(estado.pitchArraste));
   camera.updateMatrixWorld();
 
   // --- Renderização (normal ou estéreo) ---

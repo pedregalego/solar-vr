@@ -47,14 +47,14 @@ automático. Funciona também dentro do modo VR (a legenda vira um painel 3D).
 
 | Ação | Shinecon SC-BC03 | Teclado/Mouse |
 |---|---|---|
-| Pausar/Despausar órbita | A ou B | Espaço ou Enter |
-| Inverter sentido | X ou Y | Backspace ou Esc |
+| Pausar/Despausar órbita | A ou B | Espaço |
+| Recentralizar visão | X ou Y | R |
+| Inverter sentido | menu ☰ | Backspace ou Esc |
 | Acelerar | D-pad ↑ / ← | Setas ↑ / → |
 | Desacelerar | D-pad ↓ / → | Setas ↓ / ← |
 | Diminuir / Aumentar IPD | L / R | Slider "AJUSTAR OLHOS" |
 | Abrir/fechar MENU | Start | M |
-| Recentralizar visão | menu ☰ | R |
-| Disparar / Selecionar na mira | Gatilho (calibrado no 1º toque) | Clique do mouse |
+| Disparar / Selecionar / Confirmar | Gatilho (calibrado no 1º toque) | Clique ou Enter |
 | Mover o olhar / mira | Joystick analógico | Arrastar na tela |
 
 Toque em um planeta ou lua para abrir a ficha técnica. Toque em área vazia (ou
@@ -159,3 +159,12 @@ a partir de registros reais da NASA. A atribuição deve ser mantida em
 redistribuições.
 
 Feito com [Three.js 0.160](https://threejs.org) · Licença livre para uso educacional.
+
+## 🎮 Dica: modo do controle SC-BC03
+
+Se os botões A/X estiverem mudando o **volume** do celular, o controle está em
+modo música/mouse — esses botões enviam teclas de volume do sistema, que nenhum
+app consegue interceptar. Desligue o controle e religue segurando **@ + B**
+(modo game) para que todos os botões cheguem ao app. Mesmo em modo mouse, o
+gatilho e o menu continuam funcionando (o app entende o clique/Enter que ele
+envia).
