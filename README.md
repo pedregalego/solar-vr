@@ -18,6 +18,23 @@ como APK Android gerado pelo PWABuilder. Otimizado para o suporte de celular
 - Disparo interativo com flash, vibração, som sintetizado e contador
 - PWA completo: funciona offline após a primeira visita
 
+## 🧭 Fluxo inicial
+
+Ao abrir, o app pergunta: **🥽 Óculos VR** ou **📱 Na tela**. Escolhendo VR,
+entra em tela cheia estéreo e mostra o passo de **calibração dos olhos**
+(ajuste com L/R até ver uma imagem única, gatilho para continuar). Em seguida
+abre o **menu** para escolher: passeio guiado ou exploração livre. O menu pode
+ser reaberto a qualquer momento com **Start** no controle (ou tecla **M**) —
+inclusive dentro do VR, onde ele aparece como painel 3D navegável com o
+D-pad/joystick e confirmado com o gatilho.
+
+## 🔊 Narração por voz
+
+As paradas do passeio e as fichas técnicas são narradas em português usando a
+voz do próprio aparelho (Web Speech API). Liga/desliga no menu
+("🔊 NARRAÇÃO"). No Android, a qualidade depende do mecanismo de
+texto-para-voz instalado (Google TTS recomendado).
+
 ## 🚀 Passeio guiado
 
 Toque em **🚀 PASSEIO** para iniciar um tour cinematográfico: a câmera parte do
@@ -35,7 +52,8 @@ automático. Funciona também dentro do modo VR (a legenda vira um painel 3D).
 | Acelerar | D-pad ↑ / ← | Setas ↑ / → |
 | Desacelerar | D-pad ↓ / → | Setas ↓ / ← |
 | Diminuir / Aumentar IPD | L / R | Slider "AJUSTAR OLHOS" |
-| Reiniciar câmera | Start | R |
+| Abrir/fechar MENU | Start | M |
+| Recentralizar visão | menu ☰ | R |
 | Disparar / Selecionar na mira | Gatilho (calibrado no 1º toque) | Clique do mouse |
 | Mover o olhar / mira | Joystick analógico | Arrastar na tela |
 

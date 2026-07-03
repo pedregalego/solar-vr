@@ -74,6 +74,34 @@ button.magenta{color:var(--magenta);border-color:var(--magenta);
   text-shadow:0 0 6px var(--magenta)}
 #sliderIPD{width:min(240px,60vw);accent-color:var(--magenta);pointer-events:auto}
 
+/* ---------- TELA INICIAL E MENU ---------- */
+#intro{position:fixed;inset:0;z-index:80;background:rgba(2,2,10,.88);
+  backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);
+  display:flex;flex-direction:column;align-items:center;justify-content:center;
+  gap:16px;padding:20px;text-align:center}
+#intro.oculto,body.vr #intro{display:none}
+#introTitulo{font-size:clamp(22px,6vw,42px);letter-spacing:.3em;font-weight:bold;
+  color:var(--ciano);text-shadow:0 0 12px var(--ciano),0 0 40px rgba(0,247,255,.5)}
+#introSub{font-size:clamp(10px,2.6vw,14px);letter-spacing:.2em;color:var(--magenta);
+  text-shadow:0 0 8px var(--magenta)}
+#introBotoes{display:flex;gap:14px;flex-wrap:wrap;justify-content:center;margin-top:8px}
+button.grande{font-size:clamp(13px,3vw,17px);padding:16px 26px;line-height:1.5}
+button.grande small{font-size:.65em;opacity:.75;letter-spacing:.05em}
+
+#menuDom{position:fixed;inset:0;z-index:75;display:none;align-items:center;
+  justify-content:center;background:rgba(2,2,10,.6);
+  backdrop-filter:blur(4px);-webkit-backdrop-filter:blur(4px)}
+#menuDom.aberto{display:flex;animation:surgir .2s ease-out}
+body.vr #menuDom{display:none} /* em VR o menu vira painel 3D */
+#menuCaixa{background:var(--painel);border:1px solid var(--ciano);border-radius:5px;
+  padding:18px 22px;width:min(340px,90vw);box-shadow:0 0 25px rgba(0,247,255,.5)}
+#menuTitulo{font-size:16px;letter-spacing:.3em;color:var(--magenta);
+  text-shadow:0 0 8px var(--magenta);margin-bottom:12px;text-align:center}
+#menuItens{display:flex;flex-direction:column;gap:8px}
+#menuItens button{width:100%;text-align:center}
+#menuItens button.ativo{border-color:var(--magenta);color:var(--magenta);
+  text-shadow:0 0 6px var(--magenta);box-shadow:0 0 14px rgba(255,0,255,.5)}
+
 /* ---------- PASSEIO GUIADO ---------- */
 #legendaPasseio{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));
   transform:translateX(-50%);z-index:25;width:min(560px,94vw);display:none;
@@ -204,6 +232,24 @@ body.vr.retrato #girarTela{display:flex}
 </div>
 
 <div id="reticulo"></div>
+
+<!-- ========= TELA INICIAL: escolha VR ou tela ========= -->
+<div id="intro">
+  <div id="introTitulo">SISTEMA SOLAR VR</div>
+  <div id="introSub">TOUR EDUCATIVO · COMO VOCÊ VAI EXPLORAR?</div>
+  <div id="introBotoes">
+    <button id="btnIntroVR" class="grande">🥽 ÓCULOS VR<br><small>Shinecon + controle</small></button>
+    <button id="btnIntroTela" class="grande magenta">📱 NA TELA<br><small>toque e arrasto</small></button>
+  </div>
+</div>
+
+<!-- ========= MENU (versão DOM, fora do VR) ========= -->
+<div id="menuDom">
+  <div id="menuCaixa">
+    <div id="menuTitulo">☰ MENU</div>
+    <div id="menuItens"></div>
+  </div>
+</div>
 <div id="flash"></div>
 <div id="divisorVR"></div>
 <button id="btnSairVR" class="magenta">✕ SAIR VR</button>
@@ -459,8 +505,10 @@ renderer.shadowMap.enabled = false;                    // sombras desligadas
 renderer.setSize(innerWidth, innerHeight);
 document.body.appendChild(renderer.domElement);
 
-cena.add(new THREE.AmbientLight(0x334455, 0.9));
-const luzSol = new THREE.PointLight(0xfff2cc, 2.4, 0, 1.6);
+// Iluminação: ambiente clara + luz do Sol SEM decaimento com a distância
+// (com decaimento, Urano e Netuno ficavam escuros demais para ver as texturas)
+cena.add(new THREE.AmbientLight(0xffffff, 0.55));
+const luzSol = new THREE.PointLight(0xffffff, 2.2, 0, 0);
 cena.add(luzSol);
 
 /* ============================================================
@@ -716,10 +764,174 @@ function disparar(){
   if (hits.length) selecionar(hits[0].object);
 }
 
-/* Ação do gatilho: durante o passeio avança a parada; fora dele, dispara */
+/* ============================================================
+   8b. NARRAÇÃO POR VOZ (Web Speech API — voz pt-BR do aparelho)
+   ============================================================ */
+let narracaoLigada = true;
+function narrar(texto){
+  if (!narracaoLigada || !('speechSynthesis' in window)) return;
+  try{
+    speechSynthesis.cancel();
+    const fala = new SpeechSynthesisUtterance(texto);
+    fala.lang = 'pt-BR'; fala.rate = 1.0; fala.pitch = 1.0;
+    const voz = speechSynthesis.getVoices()
+      .find(v => v.lang && v.lang.toLowerCase().startsWith('pt'));
+    if (voz) fala.voice = voz;
+    speechSynthesis.speak(fala);
+  }catch(e){ /* aparelho sem síntese de voz */ }
+}
+function silenciar(){
+  if ('speechSynthesis' in window) try{ speechSynthesis.cancel(); }catch(e){}
+}
+// Alguns navegadores só carregam as vozes depois de um evento
+if ('speechSynthesis' in window) speechSynthesis.getVoices();
+
+/* ============================================================
+   8c. PAINEL 3D (sprite preso à câmera — legível nos 2 olhos)
+   Usado para: calibração de visão e menu dentro do VR
+   ============================================================ */
+const painel3D = new THREE.Sprite(new THREE.SpriteMaterial({
+  transparent:true, depthWrite:false, depthTest:false }));
+painel3D.position.set(0, 0, -6);
+painel3D.scale.set(7, 4.4, 1);
+painel3D.visible = false;
+camera.add(painel3D);
+
+function desenharPainel3D(titulo, linhas, indiceAtivo){
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 640;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(2,2,10,.88)';
+  ctx.fillRect(0, 0, 1024, 640);
+  ctx.strokeStyle = '#00f7ff'; ctx.lineWidth = 5;
+  ctx.strokeRect(6, 6, 1012, 628);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff9aff'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 16;
+  ctx.font = 'bold 54px "Courier New", monospace';
+  ctx.fillText(titulo, 512, 90);
+  ctx.font = '38px "Courier New", monospace';
+  let y = 180;
+  linhas.forEach((linha, i) => {
+    const ativo = (i === indiceAtivo);
+    if (ativo){
+      ctx.fillStyle = 'rgba(255,0,255,.18)';
+      ctx.shadowBlur = 0;
+      ctx.fillRect(90, y - 40, 844, 58);
+      ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 3;
+      ctx.strokeRect(90, y - 40, 844, 58);
+    }
+    ctx.fillStyle = ativo ? '#ff9aff' : '#c8feff';
+    ctx.shadowColor = ativo ? '#ff00ff' : '#00f7ff';
+    ctx.shadowBlur = 10;
+    ctx.fillText((ativo ? '▶ ' : '') + linha, 512, y);
+    y += 78;
+  });
+  const t = new THREE.CanvasTexture(c);
+  painel3D.material.map = t;
+  painel3D.material.needsUpdate = true;
+}
+
+/* ============================================================
+   8d. MENU E FLUXO INICIAL
+   ------------------------------------------------------------
+   1º) VR ou tela?  2º) (VR) calibrar visão  3º) passeio ou livre
+   Navegação no VR: joystick/D-pad move · gatilho confirma
+   Start (ou tecla M) abre o menu a qualquer momento.
+   ============================================================ */
+estado.fase = 'intro';            // 'intro' → 'calibra' → null
+const menu = { aberto:false, indice:0 };
+
+function itensMenu(){
+  const itens = [];
+  itens.push({ rotulo: estado.passeio.ativo ? '✕ ENCERRAR PASSEIO' : '🚀 PASSEIO GUIADO',
+    acao: () => { estado.passeio.ativo ? encerrarPasseio() : iniciarPasseio(); fecharMenu(); } });
+  itens.push({ rotulo: '🧭 EXPLORAÇÃO LIVRE',
+    acao: () => { encerrarPasseio(); fecharMenu(); } });
+  itens.push({ rotulo: '🎯 RECENTRALIZAR VISÃO',
+    acao: () => { reiniciarCamera(); fecharMenu(); } });
+  itens.push({ rotulo: narracaoLigada ? '🔊 NARRAÇÃO: LIGADA' : '🔇 NARRAÇÃO: DESLIGADA',
+    acao: () => { narracaoLigada = !narracaoLigada; if (!narracaoLigada) silenciar(); renderizarMenu(); } });
+  if (estado.vr) itens.push({ rotulo: '👋 SAIR DO VR',
+    acao: () => { fecharMenu(); sairVR(); } });
+  itens.push({ rotulo: '— FECHAR —', acao: fecharMenu });
+  return itens;
+}
+function renderizarMenu(){
+  const itens = itensMenu();
+  if (menu.indice >= itens.length) menu.indice = 0;
+  // Painel 3D (VR)
+  desenharPainel3D('☰ MENU', itens.map(i => i.rotulo), menu.indice);
+  // Versão DOM (fora do VR)
+  const caixa = document.getElementById('menuItens');
+  caixa.innerHTML = '';
+  itens.forEach((item, i) => {
+    const b = document.createElement('button');
+    b.textContent = item.rotulo;
+    if (i === menu.indice) b.classList.add('ativo');
+    b.addEventListener('click', item.acao);
+    caixa.appendChild(b);
+  });
+}
+function abrirMenu(){
+  menu.aberto = true; menu.indice = 0;
+  renderizarMenu();
+  document.getElementById('menuDom').classList.add('aberto');
+  painel3D.visible = estado.vr;
+}
+function fecharMenu(){
+  menu.aberto = false;
+  document.getElementById('menuDom').classList.remove('aberto');
+  painel3D.visible = (estado.fase === 'calibra');
+}
+function menuMover(d){
+  const n = itensMenu().length;
+  menu.indice = (menu.indice + d + n) % n;
+  renderizarMenu();
+  somSelecao();
+}
+function menuConfirmar(){ itensMenu()[menu.indice].acao(); }
+document.getElementById('menuDom').addEventListener('pointerdown', e => {
+  if (e.target.id === 'menuDom') fecharMenu(); // toque fora fecha
+});
+
+function mostrarCalibracao(){
+  estado.fase = 'calibra';
+  desenharPainel3D('AJUSTE DOS OLHOS', [
+    'Encaixe o celular no óculos.',
+    'Aperte L / R no controle até',
+    'ver UMA imagem única e nítida.',
+    ' ',
+    'GATILHO (ou toque) p/ continuar'
+  ], -1);
+  painel3D.visible = true;
+  narrar('Encaixe o celular no óculos e ajuste com os botões L e R até ver uma imagem única. Depois, aperte o gatilho.');
+}
+function concluirCalibracao(){
+  estado.fase = null;
+  painel3D.visible = false;
+  abrirMenu(); // 3º passo: escolher passeio ou exploração livre
+  narrar('Agora escolha: passeio guiado ou exploração livre.');
+}
+// Tela inicial (DOM)
+document.getElementById('btnIntroVR').addEventListener('click', async () => {
+  document.getElementById('intro').classList.add('oculto');
+  garantirAudio();
+  await entrarVR();
+  mostrarCalibracao();
+});
+document.getElementById('btnIntroTela').addEventListener('click', () => {
+  document.getElementById('intro').classList.add('oculto');
+  estado.fase = null;
+  garantirAudio();
+  abrirMenu(); // escolher o modo
+});
+
+/* Ação do gatilho conforme o contexto atual */
 function acaoGatilho(){
-  if (estado.passeio.ativo) proximaParada();
-  else disparar();
+  if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
+  if (menu.aberto){ menuConfirmar(); return; }
+  if (estado.passeio.ativo){ proximaParada(); return; }
+  disparar();
 }
 
 /* ============================================================
@@ -765,6 +977,14 @@ function abrirFicha(ud){
     .map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   cur.textContent = '» ' + d.curiosidade;
   elModal.classList.add('aberto');
+  // Narração por voz da ficha
+  if (ud.tipo === 'planeta'){
+    const luasFala = d.luas === '0' ? 'sem luas'
+      : d.luas === '1' ? 'com uma lua' : `com ${d.luas} luas`;
+    narrar(`${d.nome}. Planeta ${d.tipo.toLowerCase()}, ${luasFala}. ${d.curiosidade}`);
+  } else {
+    narrar(`${d.nome}, lua de ${ud.planetaMae}. ${d.curiosidade}`);
+  }
 }
 document.getElementById('btnFechar').addEventListener('click', limparSelecao);
 elModal.addEventListener('pointerdown', e => {
@@ -828,11 +1048,24 @@ function paradaAtual(){
 function mostrarParada(){
   const p = paradaAtual();
   const num = estado.passeio.indice + 2; // Sol = 1
+  const ehSol = estado.passeio.indice < 0;
+  const infoLuas = ehSol ? '☀️ Estrela central · 8 planetas'
+    : `🌙 Luas: ${p.luas}` + (p.tipo ? ` · ${p.tipo}` : '');
   const titulo = `${p.icone} ${p.nome.toUpperCase()} · ${num}/9`;
   document.getElementById('legNome').textContent = titulo;
-  document.getElementById('legTexto').textContent = '» ' + p.curiosidade;
-  desenharLegenda3D(`${p.nome.toUpperCase()} · ${num}/9`, p.curiosidade);
+  document.getElementById('legTexto').innerHTML =
+    `${infoLuas}<br>» ${p.curiosidade}`;
+  desenharLegenda3D(`${p.nome.toUpperCase()} · ${num}/9`,
+    `${ehSol ? '' : 'Luas: ' + p.luas + ' · '}${p.curiosidade}`);
   somSelecao();
+  // Narração por voz da parada
+  if (ehSol){
+    narrar(`O Sol. ${p.curiosidade}`);
+  } else {
+    const luasFala = p.luas === '0' ? 'sem luas'
+      : p.luas === '1' ? 'com uma lua' : `com ${p.luas} luas`;
+    narrar(`${p.nome}. Planeta ${p.tipo.toLowerCase()}, ${luasFala}. ${p.curiosidade}`);
+  }
 }
 function iniciarPasseio(){
   limparSelecao();
@@ -845,6 +1078,7 @@ function iniciarPasseio(){
   mostrarParada();
 }
 function encerrarPasseio(){
+  silenciar();
   estado.passeio.ativo = false;
   document.body.classList.remove('passeio');
   legenda3D.visible = false;
@@ -887,6 +1121,8 @@ addEventListener('pointerup', e => {
   if (!ptrAtivo) return;
   ptrAtivo = false;
   if (ptrMoveu) return; // foi arrasto, não toque
+  if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
+  if (menu.aberto){ if (estado.vr) menuConfirmar(); return; } // fora do VR o menu é DOM
   if (estado.passeio.ativo){ proximaParada(); return; } // toque avança o passeio
   // Toque simples: tenta selecionar objeto sob o dedo/cursor
   const nd = new THREE.Vector2(
@@ -939,7 +1175,18 @@ async function ativarGiroscopio(){
    ============================================================ */
 addEventListener('keydown', e => {
   garantirAudio();
+  // Menu aberto: setas navegam, Enter/Espaço confirmam
+  if (menu.aberto){
+    if (e.code === 'ArrowUp') menuMover(-1);
+    else if (e.code === 'ArrowDown') menuMover(1);
+    else if (e.code === 'Enter' || e.code === 'Space') menuConfirmar();
+    else if (e.code === 'Escape' || e.code === 'KeyM') fecharMenu();
+    return;
+  }
+  if (estado.fase === 'calibra' &&
+      (e.code === 'Enter' || e.code === 'Space')){ concluirCalibracao(); return; }
   switch (e.code){
+    case 'KeyM': abrirMenu(); return;
     case 'Space': case 'Enter':
       estado.pausado = !estado.pausado; break;
     case 'ArrowUp': case 'ArrowRight':
@@ -969,21 +1216,22 @@ function reiniciarCamera(){
    14. GAMEPAD — SHINECON SC-BC03 (mapeamento completo)
    ------------------------------------------------------------
    O gatilho varia de índice conforme o lote/modo do controle,
-   então o app CALIBRA: o primeiro botão apertado após conectar
-   vira o botão de disparo. Os demais mantêm o mapeamento padrão:
+   então a calibração é implícita: o PRIMEIRO botão de ação
+   pressionado vira o gatilho. D-pad, Start e L/R são reservados
+   e mantêm suas funções (por isso nunca viram gatilho).
    A(0)/B(1) pausar · X(2)/Y(3) inverter · L(4)/R(5) IPD
-   Start(9) reiniciar · D-pad ↑/←: acelerar · ↓/→: desacelerar
+   Start(9) MENU · D-pad: velocidade (ou navegação no menu)
    Joystick analógico: move o olhar/mira (navegação 360°)
    ============================================================ */
 let botoesAnteriores = [];
 let gamepadConectado = null;
-let indiceGatilho = null;       // definido pela calibração
-let calibrandoGatilho = false;
+let indiceGatilho = null;   // calibrado no primeiro botão de ação
+let eixoYAnterior = 0;
+const BOTOES_RESERVADOS = [4, 5, 9, 12, 13, 14, 15];
 
 addEventListener('gamepadconnected', e => {
   gamepadConectado = e.gamepad.id;
-  calibrandoGatilho = true;
-  avisar('🎮 Controle detectado! Aperte o GATILHO uma vez para calibrar o disparo.');
+  avisar('🎮 Controle detectado! O primeiro botão de ação apertado vira o GATILHO.');
   atualizarHUD();
 });
 addEventListener('gamepaddisconnected', () => {
@@ -998,60 +1246,61 @@ function lerGamepad(){
   if (!gp) return;
   if (!gamepadConectado){
     gamepadConectado = gp.id;
-    calibrandoGatilho = true;
-    avisar('🎮 Controle detectado! Aperte o GATILHO uma vez para calibrar o disparo.');
+    avisar('🎮 Controle detectado! O primeiro botão de ação apertado vira o GATILHO.');
     atualizarHUD();
   }
 
   const apertou = i =>
     gp.buttons[i] && gp.buttons[i].pressed && !botoesAnteriores[i];
 
-  // --- Calibração: o primeiro botão pressionado vira o gatilho ---
-  if (calibrandoGatilho){
+  // --- Calibração implícita: primeiro botão não-reservado = gatilho ---
+  if (indiceGatilho === null){
     for (let i = 0; i < gp.buttons.length; i++){
-      if (apertou(i)){
+      if (apertou(i) && !BOTOES_RESERVADOS.includes(i)){
         indiceGatilho = i;
-        calibrandoGatilho = false;
-        avisar('🔫 Gatilho calibrado (botão ' + i + ')! Os demais botões seguem o padrão.');
-        acaoGatilho();
+        avisar('🔫 Gatilho calibrado (botão ' + i + ')');
         break;
       }
     }
-    botoesAnteriores = gp.buttons.map(b => b.pressed);
-    return;
   }
-
-  // Disparo: botão calibrado (ou 6/7 como reserva)
   const eGatilho = i => (indiceGatilho !== null ? i === indiceGatilho
                                                 : (i === 6 || i === 7));
-  // Botões "livres": pressionados e que não são o gatilho
-  const livre = i => apertou(i) && !eGatilho(i);
 
+  // Gatilho: ação depende do contexto (calibração/menu/passeio/disparo)
   for (let i = 0; i < gp.buttons.length; i++){
     if (eGatilho(i) && apertou(i)) acaoGatilho();
   }
-  if (livre(0) || livre(1)) estado.pausado = !estado.pausado;   // A/B
-  if (livre(2) || livre(3)) estado.direcao *= -1;               // X/Y
-  if (livre(4)) ajustarIPD(estado.ipdMm - 1);                   // L
-  if (livre(5)) ajustarIPD(estado.ipdMm + 1);                   // R
-  if (livre(9)) reiniciarCamera();                              // Start
-  if (livre(12) || livre(14))                                   // ↑ / ←
-    estado.velocidade = Math.min(5, estado.velocidade + .1);
-  if (livre(13) || livre(15))                                   // ↓ / →
-    estado.velocidade = Math.max(.1, estado.velocidade - .1);
+  // L/R sempre ajustam a distância dos olhos (IPD)
+  if (apertou(4)) ajustarIPD(estado.ipdMm - 1);
+  if (apertou(5)) ajustarIPD(estado.ipdMm + 1);
+  // Start abre/fecha o menu
+  if (apertou(9)) menu.aberto ? fecharMenu() : abrirMenu();
 
-  // --- Joystick analógico: move o olhar/mira (360°) ---
-  const zonaMorta = 0.22;
-  if (gp.axes.length >= 2){
+  if (menu.aberto){
+    // --- Navegação no menu: D-pad ou joystick ---
+    if (apertou(12) || apertou(14)) menuMover(-1);
+    if (apertou(13) || apertou(15)) menuMover(1);
+    const ay = gp.axes[1] || 0;
+    if (Math.abs(ay) > 0.6 && Math.abs(eixoYAnterior) <= 0.6)
+      menuMover(ay > 0 ? 1 : -1);
+    eixoYAnterior = ay;
+  } else if (estado.fase !== 'calibra'){
+    // --- Mapeamento normal ---
+    const livre = i => apertou(i) && !eGatilho(i);
+    if (livre(0) || livre(1)) estado.pausado = !estado.pausado;   // A/B
+    if (livre(2) || livre(3)) estado.direcao *= -1;               // X/Y
+    if (livre(12) || livre(14))                                   // ↑ / ←
+      estado.velocidade = Math.min(5, estado.velocidade + .1);
+    if (livre(13) || livre(15))                                   // ↓ / →
+      estado.velocidade = Math.max(.1, estado.velocidade - .1);
+
+    // Joystick analógico: move o olhar/mira (360°)
+    const zonaMorta = 0.22;
     const ax = gp.axes[0] || 0, ay = gp.axes[1] || 0;
     if (Math.abs(ax) > zonaMorta) estado.yawArraste -= ax * 0.045;
     if (Math.abs(ay) > zonaMorta)
       estado.pitchArraste = clampePitch(estado.pitchArraste - ay * 0.030);
-  }
-  // Segundo analógico (se existir): ajuste fino de velocidade
-  if (gp.axes.length >= 4 && Math.abs(gp.axes[3]) > 0.4){
-    estado.velocidade = THREE.MathUtils.clamp(
-      estado.velocidade - gp.axes[3] * 0.02, .1, 5);
+    eixoYAnterior = ay;
   }
   botoesAnteriores = gp.buttons.map(b => b.pressed);
   atualizarHUD();
@@ -1086,7 +1335,10 @@ function sairVR(){
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   aoRedimensionar();
 }
-btnVR.addEventListener('click', entrarVR);
+btnVR.addEventListener('click', async () => {
+  await entrarVR();
+  mostrarCalibracao();
+});
 btnSairVR.addEventListener('click', sairVR);
 
 function verificarOrientacao(){
