@@ -74,6 +74,24 @@ button.magenta{color:var(--magenta);border-color:var(--magenta);
   text-shadow:0 0 6px var(--magenta)}
 #sliderIPD{width:min(240px,60vw);accent-color:var(--magenta);pointer-events:auto}
 
+/* ---------- PASSEIO GUIADO ---------- */
+#legendaPasseio{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:25;width:min(560px,94vw);display:none;
+  flex-direction:column;gap:6px;background:var(--painel);
+  border:1px solid var(--magenta);border-radius:5px;padding:12px 16px;
+  box-shadow:0 0 20px rgba(255,0,255,.4);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);pointer-events:auto;
+  animation:surgir .3s ease-out}
+body.passeio #legendaPasseio{display:flex}
+body.passeio #rodape .chip,body.passeio #btnIPD{display:none}
+body.vr #legendaPasseio{display:none} /* em VR a legenda vira sprite 3D */
+#legNome{font-size:clamp(14px,3.4vw,20px);letter-spacing:.2em;font-weight:bold;
+  color:var(--magenta);text-shadow:0 0 8px var(--magenta)}
+#legTexto{font-size:clamp(11px,2.6vw,14px);color:#e8fdff;line-height:1.5;
+  text-shadow:0 0 5px rgba(0,247,255,.5)}
+#legBotoes{display:flex;gap:8px;margin-top:4px}
+#legBotoes button{flex:1}
+
 /* ---------- MODAL FICHA TÉCNICA ---------- */
 #modal{position:fixed;inset:0;z-index:40;display:none;align-items:center;
   justify-content:center;background:rgba(2,2,10,.55);
@@ -152,8 +170,19 @@ body.vr.retrato #girarTela{display:flex}
   </div>
   <div id="rodape">
     <span class="chip" id="chipProximo">📍 Calculando…</span>
+    <button id="btnPasseio" class="magenta">🚀 PASSEIO</button>
     <button id="btnVR">⬡ ENTRAR VR</button>
     <button id="btnIPD" class="magenta">AJUSTAR OLHOS</button>
+  </div>
+</div>
+
+<!-- Legenda do passeio guiado -->
+<div id="legendaPasseio">
+  <div id="legNome">☀️ SOL · 1/9</div>
+  <div id="legTexto">—</div>
+  <div id="legBotoes">
+    <button id="btnProximaParada">PRÓXIMO ▶</button>
+    <button id="btnSairPasseio" class="magenta">✕ SAIR</button>
   </div>
 </div>
 
@@ -395,6 +424,29 @@ function spriteRotulo(texto){
 }
 
 /* ============================================================
+   2b. TEXTURAS REAIS (Solar System Scope · CC BY 4.0)
+   Mapas construídos a partir de registros reais da NASA.
+   As texturas procedurais entram na hora e servem de reserva;
+   quando o arquivo real carrega, o material é trocado.
+   ============================================================ */
+const carregador = new THREE.TextureLoader();
+function aplicarTexturaReal(material, arquivo){
+  carregador.load('./texturas/' + arquivo,
+    (t) => {
+      t.colorSpace = THREE.SRGBColorSpace;
+      material.map = t;
+      material.needsUpdate = true;
+    },
+    undefined,
+    () => { /* offline/erro: mantém a textura procedural */ });
+}
+const ARQUIVO_TEXTURA = {
+  'Mercúrio':'mercurio.jpg', 'Vênus':'venus.jpg', 'Terra':'terra.jpg',
+  'Marte':'marte.jpg', 'Júpiter':'jupiter.jpg', 'Saturno':'saturno.jpg',
+  'Urano':'urano.jpg', 'Netuno':'netuno.jpg'
+};
+
+/* ============================================================
    3. CENA, CÂMERA E RENDERIZADOR
    ============================================================ */
 const cena = new THREE.Scene();
@@ -464,6 +516,7 @@ cena.add(viaLactea);
 const sol = new THREE.Mesh(
   new THREE.SphereGeometry(3, 32, 24),
   new THREE.MeshBasicMaterial({ map: texturaSol() }));
+aplicarTexturaReal(sol.material, 'sol.jpg'); // registro real da fotosfera
 cena.add(sol);
 const corona = new THREE.Sprite(new THREE.SpriteMaterial({
   map: texturaRadial('rgba(255,200,80,.9)', 'rgba(255,120,0,0)'),
@@ -492,8 +545,9 @@ for (const dados of DADOS_PLANETAS){
   else                               mapa = texturaRochosa(dados.cor, dados.nome.length*13);
 
   const mesh = new THREE.Mesh(
-    new THREE.SphereGeometry(dados.raio, 24, 18),
+    new THREE.SphereGeometry(dados.raio, 40, 28), // + segmentos: visita de perto
     new THREE.MeshStandardMaterial({ map:mapa, roughness:.9, metalness:.05 }));
+  aplicarTexturaReal(mesh.material, ARQUIVO_TEXTURA[dados.nome]); // mapa real NASA
   mesh.userData = { tipo:'planeta', dados };
   grupo.add(mesh);
   selecionaveis.push(mesh);
@@ -516,7 +570,8 @@ for (const dados of DADOS_PLANETAS){
           ctx.fillRect(x, 0, 1, px);
         }
       }),
-      side:THREE.DoubleSide, transparent:true, opacity:.85 }));
+      side:THREE.DoubleSide, transparent:true, opacity:.9 }));
+    aplicarTexturaReal(anel.material, 'anel-saturno.png'); // faixa do anel real
     anel.rotation.x = Math.PI/2 - 0.35;
     mesh.add(anel);
   }
@@ -597,6 +652,7 @@ const estado = {
   vr: false, ipdMm: 60,
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
+  passeio: { ativo:false, indice:-1, tempoParada:0 }, // -1 = Sol, 0..7 = planetas
   alvoOlhar: new THREE.Vector3(0,0,0),  // suavizado
   posCamera: new THREE.Vector3(46,14,0)
 };
@@ -660,6 +716,12 @@ function disparar(){
   if (hits.length) selecionar(hits[0].object);
 }
 
+/* Ação do gatilho: durante o passeio avança a parada; fora dele, dispara */
+function acaoGatilho(){
+  if (estado.passeio.ativo) proximaParada();
+  else disparar();
+}
+
 /* ============================================================
    10. SELEÇÃO INTERATIVA (raycaster + modal)
    ============================================================ */
@@ -710,6 +772,101 @@ elModal.addEventListener('pointerdown', e => {
 });
 
 /* ============================================================
+   10b. PASSEIO GUIADO — do Sol a Netuno, parando em cada planeta
+   ------------------------------------------------------------
+   A câmera viaja suavemente até bem perto de cada astro,
+   orbita devagar ao redor e mostra a curiosidade na legenda.
+   Avança com: gatilho do controle, toque na tela, tecla N,
+   botão "PRÓXIMO" — ou automaticamente após 18 segundos.
+   ============================================================ */
+const PARADA_SOL = { nome:'Sol', icone:'☀️',
+  curiosidade:'A estrela central: concentra 99,8% de toda a massa do Sistema Solar.' };
+
+const elLegenda = document.getElementById('legendaPasseio');
+const btnPasseio = document.getElementById('btnPasseio');
+
+// Legenda 3D (sprite preso à câmera) para o modo VR
+const legenda3D = new THREE.Sprite(new THREE.SpriteMaterial({
+  transparent:true, depthWrite:false, depthTest:false }));
+legenda3D.position.set(0, -2.1, -6);
+legenda3D.scale.set(6.4, 1.6, 1);
+legenda3D.visible = false;
+camera.add(legenda3D);
+
+function desenharLegenda3D(titulo, texto){
+  const c = document.createElement('canvas');
+  c.width = 1024; c.height = 256;
+  const ctx = c.getContext('2d');
+  ctx.fillStyle = 'rgba(2,2,10,.82)';
+  ctx.fillRect(0, 0, 1024, 256);
+  ctx.strokeStyle = '#ff00ff'; ctx.lineWidth = 4;
+  ctx.strokeRect(4, 4, 1016, 248);
+  ctx.textAlign = 'center';
+  ctx.fillStyle = '#ff9aff'; ctx.shadowColor = '#ff00ff'; ctx.shadowBlur = 14;
+  ctx.font = 'bold 52px "Courier New", monospace';
+  ctx.fillText(titulo, 512, 78);
+  ctx.fillStyle = '#d8feff'; ctx.shadowColor = '#00f7ff'; ctx.shadowBlur = 8;
+  ctx.font = '34px "Courier New", monospace';
+  // quebra simples de linha
+  const palavras = texto.split(' ');
+  let linha = '', y = 145;
+  for (const p of palavras){
+    if ((linha + p).length > 52){ ctx.fillText(linha, 512, y); linha = ''; y += 46; }
+    linha += p + ' ';
+  }
+  ctx.fillText(linha.trim(), 512, y);
+  const t = new THREE.CanvasTexture(c);
+  legenda3D.material.map = t;
+  legenda3D.material.needsUpdate = true;
+}
+
+function paradaAtual(){
+  return estado.passeio.indice < 0
+    ? PARADA_SOL
+    : DADOS_PLANETAS[estado.passeio.indice];
+}
+function mostrarParada(){
+  const p = paradaAtual();
+  const num = estado.passeio.indice + 2; // Sol = 1
+  const titulo = `${p.icone} ${p.nome.toUpperCase()} · ${num}/9`;
+  document.getElementById('legNome').textContent = titulo;
+  document.getElementById('legTexto').textContent = '» ' + p.curiosidade;
+  desenharLegenda3D(`${p.nome.toUpperCase()} · ${num}/9`, p.curiosidade);
+  somSelecao();
+}
+function iniciarPasseio(){
+  limparSelecao();
+  estado.passeio.ativo = true;
+  estado.passeio.indice = -1;
+  estado.passeio.tempoParada = 0;
+  document.body.classList.add('passeio');
+  legenda3D.visible = estado.vr;
+  btnPasseio.textContent = '✕ FIM';
+  mostrarParada();
+}
+function encerrarPasseio(){
+  estado.passeio.ativo = false;
+  document.body.classList.remove('passeio');
+  legenda3D.visible = false;
+  btnPasseio.textContent = '🚀 PASSEIO';
+}
+function proximaParada(){
+  if (!estado.passeio.ativo) return;
+  if (estado.passeio.indice >= DADOS_PLANETAS.length - 1){
+    encerrarPasseio(); // Netuno era a última parada
+    avisar('🚀 Fim do passeio! Você visitou todo o Sistema Solar.');
+    return;
+  }
+  estado.passeio.indice++;
+  estado.passeio.tempoParada = 0;
+  mostrarParada();
+}
+btnPasseio.addEventListener('click', () =>
+  estado.passeio.ativo ? encerrarPasseio() : iniciarPasseio());
+document.getElementById('btnProximaParada').addEventListener('click', proximaParada);
+document.getElementById('btnSairPasseio').addEventListener('click', encerrarPasseio);
+
+/* ============================================================
    11. TOQUE / ARRASTO / CLIQUE (fallback sem giroscópio)
    ============================================================ */
 let ptrAtivo = false, ptrX = 0, ptrY = 0, ptrMoveu = false;
@@ -730,6 +887,7 @@ addEventListener('pointerup', e => {
   if (!ptrAtivo) return;
   ptrAtivo = false;
   if (ptrMoveu) return; // foi arrasto, não toque
+  if (estado.passeio.ativo){ proximaParada(); return; } // toque avança o passeio
   // Toque simples: tenta selecionar objeto sob o dedo/cursor
   const nd = new THREE.Vector2(
     (e.clientX / innerWidth) * 2 - 1,
@@ -793,6 +951,7 @@ addEventListener('keydown', e => {
       else estado.direcao *= -1;
       break;
     case 'KeyR': reiniciarCamera(); break;
+    case 'KeyN': proximaParada(); break;
   }
   atualizarHUD();
 });
@@ -854,7 +1013,7 @@ function lerGamepad(){
         indiceGatilho = i;
         calibrandoGatilho = false;
         avisar('🔫 Gatilho calibrado (botão ' + i + ')! Os demais botões seguem o padrão.');
-        disparar();
+        acaoGatilho();
         break;
       }
     }
@@ -869,7 +1028,7 @@ function lerGamepad(){
   const livre = i => apertou(i) && !eGatilho(i);
 
   for (let i = 0; i < gp.buttons.length; i++){
-    if (eGatilho(i) && apertou(i)) disparar();
+    if (eGatilho(i) && apertou(i)) acaoGatilho();
   }
   if (livre(0) || livre(1)) estado.pausado = !estado.pausado;   // A/B
   if (livre(2) || livre(3)) estado.direcao *= -1;               // X/Y
@@ -909,6 +1068,7 @@ async function entrarVR(){
   estado.vr = true;
   document.body.classList.add('vr');
   reticulo3D.visible = true;
+  legenda3D.visible = estado.passeio.ativo;
   estado.refAlpha = null; // recentraliza olhar
   await ativarGiroscopio();
   try{ await document.documentElement.requestFullscreen(); }
@@ -921,6 +1081,7 @@ function sairVR(){
   estado.vr = false;
   document.body.classList.remove('vr', 'retrato');
   reticulo3D.visible = false;
+  legenda3D.visible = false;
   try{ screen.orientation.unlock(); }catch(e){}
   if (document.fullscreenElement) document.exitFullscreen().catch(()=>{});
   aoRedimensionar();
@@ -1019,7 +1180,27 @@ function animar(){
 
   // --- Câmera orbital ---
   let posDesejada, alvoDesejado;
-  if (estado.selecionado){
+  if (estado.passeio.ativo){
+    // PASSEIO GUIADO: viaja até bem perto do astro e orbita devagar
+    estado.passeio.tempoParada += dt;
+    if (estado.passeio.tempoParada > 18) proximaParada(); // avanço automático
+    if (estado.passeio.indice < 0){
+      // Parada 1: o Sol, de perto
+      const a = performance.now() * 0.00012;
+      posDesejada = new THREE.Vector3(Math.cos(a)*9, 2.5, Math.sin(a)*9);
+      alvoDesejado = new THREE.Vector3(0, 0, 0);
+    } else {
+      const p = planetas[estado.passeio.indice];
+      p.mesh.getWorldPosition(_vTmp);
+      const r = p.dados.raio;
+      const a = estado.passeio.tempoParada * 0.18; // órbita lenta na parada
+      const radial = _vTmp.clone().normalize().multiplyScalar(r * 2.2);
+      posDesejada = _vTmp.clone()
+        .add(radial)
+        .add(new THREE.Vector3(Math.cos(a)*r*2.6, r*1.4, Math.sin(a)*r*2.6));
+      alvoDesejado = _vTmp.clone();
+    }
+  } else if (estado.selecionado){
     // Órbita lenta ao redor do objeto selecionado (3 s em destaque)
     estado.tempoSelecao += dt;
     estado.selecionado.getWorldPosition(_vTmp);
@@ -1039,9 +1220,10 @@ function animar(){
       Math.sin(estado.anguloCamera) * estado.raioCamera);
     alvoDesejado = new THREE.Vector3(0, 0, 0); // sempre olhando o Sol
   }
-  // Transições suaves entre pontos de observação
-  estado.posCamera.lerp(posDesejada, 1 - Math.pow(0.02, dt));
-  estado.alvoOlhar.lerp(alvoDesejado, 1 - Math.pow(0.02, dt));
+  // Transições suaves; no passeio a viagem é mais cinematográfica (lenta)
+  const suavidade = estado.passeio.ativo ? Math.pow(0.30, dt) : Math.pow(0.02, dt);
+  estado.posCamera.lerp(posDesejada, 1 - suavidade);
+  estado.alvoOlhar.lerp(alvoDesejado, 1 - suavidade);
   camera.position.copy(estado.posCamera);
   camera.lookAt(estado.alvoOlhar);
 

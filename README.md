@@ -9,12 +9,22 @@ como APK Android gerado pelo PWABuilder. Otimizado para o suporte de celular
 
 - Sol pulsante com corona + 8 planetas com órbitas em escala logarítmica
 - 9 luas orbitando em tempo real (Lua, Fobos, Deimos, Io, Europa, Ganimedes, Calisto, Titã, Encélado)
-- Texturas 100% procedurais (Canvas API) — nenhuma imagem externa
+- Texturas reais dos planetas e do Sol (mapas de missões da NASA); as
+  procedurais permanecem como reserva instantânea/offline
+- Passeio guiado cinematográfico do Sol a Netuno
 - Seleção por toque/clique/gatilho com ficha técnica em modal cyberpunk
 - Câmera orbital com giroscópio, toque/arrasto, teclado e gamepad
 - Modo VR estéreo side-by-side com ajuste de IPD (50–78 mm)
 - Disparo interativo com flash, vibração, som sintetizado e contador
 - PWA completo: funciona offline após a primeira visita
+
+## 🚀 Passeio guiado
+
+Toque em **🚀 PASSEIO** para iniciar um tour cinematográfico: a câmera parte do
+Sol e viaja de pertinho por cada um dos 8 planetas, mostrando a curiosidade de
+cada parada. Avance com o **gatilho do controle**, um **toque na tela**, a
+tecla **N** ou o botão **PRÓXIMO ▶** — ou aguarde 18 s para o avanço
+automático. Funciona também dentro do modo VR (a legenda vira um painel 3D).
 
 ## 🎮 Controles
 
@@ -122,5 +132,12 @@ Abra a URL `https://…` gerada no navegador do celular.
 - Sem gamepad? Tudo funciona com toque + teclado.
 - As distâncias e tamanhos são comprimidos (escala logarítmica) para fins
   educacionais; os dados das fichas técnicas são os valores reais.
+
+## 🖼️ Créditos das texturas
+
+Mapas planetários e solar de [Solar System Scope](https://www.solarsystemscope.com/textures/)
+(licença [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/)), elaborados
+a partir de registros reais da NASA. A atribuição deve ser mantida em
+redistribuições.
 
 Feito com [Three.js 0.160](https://threejs.org) · Licença livre para uso educacional.
