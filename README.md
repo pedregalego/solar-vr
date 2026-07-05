@@ -8,10 +8,12 @@ como APK Android gerado pelo PWABuilder. Otimizado para o suporte de celular
 ## ✨ Recursos
 
 - Sol pulsante com corona + 8 planetas com órbitas em escala logarítmica
-- 9 luas orbitando em tempo real (Lua, Fobos, Deimos, Io, Europa, Ganimedes, Calisto, Titã, Encélado)
+- 10 luas orbitando em tempo real (Lua, Fobos, Deimos, Io, Europa, Ganimedes, Calisto, Titã, Encélado, Larissa)
 - Texturas reais dos planetas e do Sol (mapas de missões da NASA); as
   procedurais permanecem como reserva instantânea/offline
 - Passeio guiado cinematográfico do Sol a Netuno
+- Pouso na superfície de cada planeta + corte transversal do interior
+  (camadas segundo a NASA), com narração
 - Seleção por toque/clique/gatilho com ficha técnica em modal cyberpunk
 - Câmera orbital com giroscópio, toque/arrasto, teclado e gamepad
 - Modo VR estéreo side-by-side com ajuste de IPD (50–78 mm)
@@ -43,6 +45,25 @@ do zodíaco** (+ Órion e Cruzeiro do Sul), a linha magenta da **eclíptica** �
 caminho do Sol — e rótulos com os nomes. No menu, **✨ PASSEIO PELO ZODÍACO**
 percorre de Áries a Peixes: a constelação da vez acende em magenta enquanto a
 narração conta as datas do signo, sua estrela mais brilhante e uma curiosidade.
+
+## 🛬 Pouso e interior dos planetas (dados NASA)
+
+Com um planeta enquadrado — pela **ficha técnica**, por uma **parada do passeio**
+ou pelo **menu** (que oferece pousar no planeta mais próximo) — toque em
+**🛬 POUSAR**: a câmera desce em voo cinematográfico até rente à superfície,
+sempre mantendo o planeta enquadrado. Pousado, o painel mostra como é o solo
+segundo a NASA e o botão **🔬 VER INTERIOR** troca o planeta por um **corte
+transversal** com as camadas internas (crosta, manto, núcleo, hidrogênio
+metálico…), cada uma com nome e descrição baseados nos dados da NASA — as
+espessuras são exageradas para visualização, como nos diagramas oficiais.
+
+- **Gigantes gasosos** não têm chão: o pouso vira um **mergulho na atmosfera**,
+  com a explicação da NASA de que uma nave afundaria pelas nuvens.
+- Atalhos: **P** pousa/decola · **I** alterna superfície ↔ interior ·
+  **Esc** decola. No controle, o **gatilho** alterna superfície ↔ interior e o
+  menu (**Start**) traz VER INTERIOR / DECOLAR — funciona também dentro do VR,
+  onde o painel vira legenda 3D.
+- A narração por voz lê a descrição da superfície e de cada camada interna.
 
 ## 🚀 Passeio guiado
 

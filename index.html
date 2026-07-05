@@ -120,6 +120,31 @@ body.vr #legendaPasseio{display:none} /* em VR a legenda vira sprite 3D */
 #legBotoes{display:flex;gap:8px;margin-top:4px}
 #legBotoes button{flex:1}
 
+/* ---------- PAINEL DE POUSO / INTERIOR (dados NASA) ---------- */
+#painelPouso{position:fixed;left:50%;bottom:max(14px,env(safe-area-inset-bottom));
+  transform:translateX(-50%);z-index:26;width:min(560px,94vw);display:none;
+  flex-direction:column;gap:6px;background:var(--painel);
+  border:1px solid var(--ciano);border-radius:5px;padding:12px 16px;
+  box-shadow:0 0 20px rgba(0,247,255,.4);backdrop-filter:blur(8px);
+  -webkit-backdrop-filter:blur(8px);pointer-events:auto;animation:surgir .3s ease-out}
+body.pouso #painelPouso{display:flex}
+body.pouso #rodape .chip,body.pouso #btnIPD,body.pouso #btnPasseio{display:none}
+body.vr #painelPouso{display:none} /* em VR o painel vira legenda 3D */
+#pousoNome{font-size:clamp(14px,3.4vw,20px);letter-spacing:.2em;font-weight:bold;
+  color:var(--ciano);text-shadow:0 0 8px var(--ciano)}
+#pousoTexto{font-size:clamp(11px,2.6vw,14px);color:#e8fdff;line-height:1.5;
+  text-shadow:0 0 5px rgba(0,247,255,.5)}
+#pousoCamadas{display:none;flex-direction:column;gap:5px;max-height:30vh;overflow-y:auto}
+#painelPouso.interior #pousoCamadas{display:flex}
+.camada{display:flex;gap:8px;align-items:flex-start;font-size:clamp(10px,2.4vw,12.5px);
+  color:#e8fdff;line-height:1.4}
+.camada .cor{flex:none;width:14px;height:14px;border-radius:50%;margin-top:2px;
+  border:1px solid rgba(255,255,255,.6);box-shadow:0 0 6px rgba(255,255,255,.4)}
+.camada b{color:var(--magenta);text-shadow:0 0 5px var(--magenta)}
+#pousoFonte{font-size:10px;opacity:.75;letter-spacing:.1em}
+#pousoBotoes{display:flex;gap:8px;margin-top:4px}
+#pousoBotoes button{flex:1}
+
 /* ---------- MODAL FICHA TÉCNICA ---------- */
 #modal{position:fixed;inset:0;z-index:40;display:none;align-items:center;
   justify-content:center;background:rgba(2,2,10,.55);
@@ -210,7 +235,20 @@ body.vr.retrato #girarTela{display:flex}
   <div id="legTexto">—</div>
   <div id="legBotoes">
     <button id="btnProximaParada">PRÓXIMO ▶</button>
+    <button id="btnPousarPasseio" class="magenta">🛬 POUSAR</button>
     <button id="btnSairPasseio" class="magenta">✕ SAIR</button>
+  </div>
+</div>
+
+<!-- Painel de pouso e interior do planeta (dados NASA) -->
+<div id="painelPouso">
+  <div id="pousoNome">—</div>
+  <div id="pousoTexto">—</div>
+  <div id="pousoCamadas"></div>
+  <div id="pousoFonte">Fonte: NASA · espessuras fora de escala para visualização</div>
+  <div id="pousoBotoes">
+    <button id="btnInterior" class="magenta">🔬 VER INTERIOR</button>
+    <button id="btnDecolar">🚀 DECOLAR</button>
   </div>
 </div>
 
@@ -227,7 +265,8 @@ body.vr.retrato #girarTela{display:flex}
     <h2 id="fichaNome">—</h2>
     <table id="fichaTabela"></table>
     <div id="curiosidade">—</div>
-    <button id="btnFechar">✕ FECHAR</button>
+    <button id="btnPousar" class="magenta" style="margin-top:14px;width:100%">🛬 POUSAR NO PLANETA</button>
+    <button id="btnFechar" style="margin-top:8px">✕ FECHAR</button>
   </div>
 </div>
 
@@ -338,7 +377,102 @@ const DADOS_LUAS = {
       curiosidade:'Única lua com atmosfera densa, tem lagos de metano.' },
     { nome:'Encélado', tam:0.14, cor:'#f0f6ff', dist:1.8, diametro:'504 km',
       distPlaneta:'238.020 km', periodo:'1,37 dias', temp:'-198 °C',
-      curiosidade:'Possui gêiseres de água gelada no polo sul.' } ]
+      curiosidade:'Possui gêiseres de água gelada no polo sul.' } ],
+  'Netuno':[
+    { nome:'Larissa', tam:0.09, cor:'#8a8a92', dist:0.7, diametro:'194 km',
+      distPlaneta:'73.548 km', periodo:'0,55 dias', temp:'-222 °C',
+      curiosidade:'Irregular e craterizada, confirmada pela Voyager 2 em 1989; sua órbita decai lentamente rumo a Netuno.' } ]
+};
+
+/* ============================================================
+   1b. INTERIOR DOS PLANETAS — ESTRUTURA INTERNA SEGUNDO A NASA
+   ------------------------------------------------------------
+   camadas: de fora para dentro.
+   frac    = fração real do raio (limite externo da camada)
+   fracVis = fração usada no desenho do corte (camadas finas,
+             como as crostas, são exageradas para ficarem
+             visíveis — mesmo recurso dos diagramas da NASA)
+   pousavel = tem superfície sólida? (gasosos não têm chão)
+   ============================================================ */
+const INTERIOR_NASA = {
+  'Mercúrio':{ pousavel:true,
+    superficie:'Terreno cinzento coberto de crateras e sem atmosfera: a temperatura vai de -180 °C à noite a 430 °C de dia.',
+    camadas:[
+      { nome:'Crosta', frac:1.00, fracVis:1.00, cor:'#b9ada0',
+        desc:'Rochosa e fina, com cerca de 35 km de espessura.' },
+      { nome:'Manto', frac:0.99, fracVis:0.88, cor:'#8a6a52',
+        desc:'Camada de rocha (silicatos) com ~330 km.' },
+      { nome:'Núcleo de ferro', frac:0.85, fracVis:0.68, cor:'#e0913f',
+        desc:'Gigante: ocupa ~85% do raio do planeta, com camada externa derretida.' } ] },
+  'Vênus':{ pousavel:true,
+    superficie:'Planícies vulcânicas a 464 °C sob pressão 92 vezes maior que a da Terra — as sondas que pousaram resistiram menos de 2 horas.',
+    camadas:[
+      { nome:'Crosta', frac:1.00, fracVis:1.00, cor:'#d8b878',
+        desc:'De rocha vulcânica (basalto), com ~20 a 40 km.' },
+      { nome:'Manto', frac:0.99, fracVis:0.86, cor:'#b06a3a',
+        desc:'Rochoso e quente, com cerca de 3.000 km.' },
+      { nome:'Núcleo de ferro e níquel', frac:0.53, fracVis:0.52, cor:'#f0a848',
+        desc:'Raio de ~3.200 km, parecido com o núcleo da Terra.' } ] },
+  'Terra':{ pousavel:true,
+    superficie:'71% coberta por oceanos de água líquida — o único lugar conhecido do universo com vida.',
+    camadas:[
+      { nome:'Crosta', frac:1.00, fracVis:1.00, cor:'#4a8a4a',
+        desc:'Camada sólida onde vivemos: de 5 km (oceanos) a 70 km (continentes).' },
+      { nome:'Manto', frac:0.99, fracVis:0.90, cor:'#c05a28',
+        desc:'Rocha quente em movimento lento, com ~2.900 km — move os continentes.' },
+      { nome:'Núcleo externo', frac:0.55, fracVis:0.55, cor:'#f0a030',
+        desc:'Ferro e níquel líquidos: seu movimento gera o campo magnético.' },
+      { nome:'Núcleo interno', frac:0.19, fracVis:0.26, cor:'#ffe080',
+        desc:'Bola sólida de ferro com 1.220 km de raio, quente como a superfície do Sol.' } ] },
+  'Marte':{ pousavel:true,
+    superficie:'Deserto gelado de poeira rica em óxido de ferro (a "ferrugem" que o deixa vermelho), explorado pelos rovers da NASA.',
+    camadas:[
+      { nome:'Crosta', frac:1.00, fracVis:1.00, cor:'#c1572f',
+        desc:'De 24 a 72 km de espessura, medida pela sonda InSight da NASA.' },
+      { nome:'Manto', frac:0.99, fracVis:0.86, cor:'#9a4020',
+        desc:'Rochoso e hoje pouco ativo — os vulcões estão adormecidos.' },
+      { nome:'Núcleo', frac:0.54, fracVis:0.52, cor:'#f0b048',
+        desc:'Líquido, de ferro, níquel e enxofre, com ~1.830 km de raio (InSight/NASA).' } ] },
+  'Júpiter':{ pousavel:false,
+    superficie:'Não há chão para pousar: segundo a NASA, uma nave afundaria pelas nuvens e seria esmagada pela pressão. Este é um mergulho na atmosfera.',
+    camadas:[
+      { nome:'Atmosfera', frac:1.00, fracVis:1.00, cor:'#e8cfa0',
+        desc:'Nuvens de amônia em faixas e tempestades como a Grande Mancha Vermelha.' },
+      { nome:'Hidrogênio líquido', frac:0.90, fracVis:0.84, cor:'#c9a06b',
+        desc:'A pressão transforma o gás em um oceano de hidrogênio líquido.' },
+      { nome:'Hidrogênio metálico', frac:0.80, fracVis:0.60, cor:'#8a7a9a',
+        desc:'Conduz eletricidade e gera o maior campo magnético entre os planetas.' },
+      { nome:'Núcleo difuso', frac:0.30, fracVis:0.28, cor:'#f0c060',
+        desc:'Rocha e gelo misturados ao hidrogênio — descoberta da sonda Juno (NASA).' } ] },
+  'Saturno':{ pousavel:false,
+    superficie:'Sem superfície sólida: segundo a NASA, é uma bola de hidrogênio e hélio menos densa que a água. Este é um mergulho na atmosfera.',
+    camadas:[
+      { nome:'Atmosfera', frac:1.00, fracVis:1.00, cor:'#e8d8a8',
+        desc:'Hidrogênio e hélio, com ventos de até 1.800 km/h.' },
+      { nome:'Hidrogênio líquido', frac:0.90, fracVis:0.82, cor:'#d8c08a',
+        desc:'Camada espessa de hidrogênio comprimido até virar líquido.' },
+      { nome:'Hidrogênio metálico', frac:0.45, fracVis:0.55, cor:'#9a8aa8',
+        desc:'Gera o campo magnético de Saturno.' },
+      { nome:'Núcleo rochoso', frac:0.25, fracVis:0.26, cor:'#f0b860',
+        desc:'Denso, com massa estimada entre 9 e 22 vezes a da Terra.' } ] },
+  'Urano':{ pousavel:false,
+    superficie:'Gigante de gelo sem superfície sólida: as nuvens de metano dão a cor azul-esverdeada. Este é um mergulho na atmosfera.',
+    camadas:[
+      { nome:'Atmosfera', frac:1.00, fracVis:1.00, cor:'#8fd8de',
+        desc:'Hidrogênio, hélio e metano — o metano absorve o vermelho da luz.' },
+      { nome:'Manto de gelos', frac:0.80, fracVis:0.74, cor:'#4a9ab8',
+        desc:'Fluido quente e denso de água, amônia e metano ("gelos", na NASA).' },
+      { nome:'Núcleo rochoso', frac:0.20, fracVis:0.30, cor:'#c8a058',
+        desc:'Pequeno, com cerca de metade da massa da Terra.' } ] },
+  'Netuno':{ pousavel:false,
+    superficie:'Sem superfície sólida e com os ventos mais rápidos do Sistema Solar, acima de 2.000 km/h. Este é um mergulho na atmosfera.',
+    camadas:[
+      { nome:'Atmosfera', frac:1.00, fracVis:1.00, cor:'#3f66d8',
+        desc:'Hidrogênio, hélio e metano, com nuvens brancas em alta altitude.' },
+      { nome:'Manto de gelos', frac:0.80, fracVis:0.72, cor:'#2a4aa8',
+        desc:'Água, amônia e metano superaquecidos e comprimidos.' },
+      { nome:'Núcleo rochoso', frac:0.20, fracVis:0.30, cor:'#c8a058',
+        desc:'De rocha e gelo, com tamanho aproximado ao da Terra.' } ] }
 };
 
 /* ============================================================
@@ -880,6 +1014,7 @@ const estado = {
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
   passeio: { ativo:false, indice:-1, tempoParada:0 }, // -1 = Sol, 0..7 = planetas
+  pouso: { ativo:false, planeta:null, interior:false }, // pousado na superfície / vendo o interior
   zodiaco: { ativo:false, indice:0, tempoParada:0 },   // 0..11 = Áries..Peixes
   alvoOlhar: new THREE.Vector3(0,0,0),  // suavizado
   posCamera: new THREE.Vector3(46,14,0)
@@ -1027,8 +1162,18 @@ function itensMenu(){
     acao: () => { estado.passeio.ativo ? encerrarPasseio() : iniciarPasseio(); fecharMenu(); } });
   itens.push({ rotulo: estado.zodiaco.ativo ? '✕ ENCERRAR ZODÍACO' : '✨ PASSEIO PELO ZODÍACO',
     acao: () => { estado.zodiaco.ativo ? encerrarZodiaco() : iniciarZodiaco(); fecharMenu(); } });
+  if (estado.pouso.ativo){
+    itens.push({ rotulo: estado.pouso.interior ? '🏔 VER SUPERFÍCIE' : '🔬 VER INTERIOR (NASA)',
+      acao: () => { alternarInterior(); fecharMenu(); } });
+    itens.push({ rotulo: '🚀 DECOLAR',
+      acao: () => { decolar(); fecharMenu(); } });
+  } else {
+    const alvo = planetaPousavel();
+    if (alvo) itens.push({ rotulo: '🛬 POUSAR EM ' + alvo.dados.nome.toUpperCase(),
+      acao: () => { pousarEm(alvo); fecharMenu(); } });
+  }
   itens.push({ rotulo: '🧭 EXPLORAÇÃO LIVRE',
-    acao: () => { encerrarTours(); fecharMenu(); } });
+    acao: () => { decolar(); encerrarTours(); fecharMenu(); } });
   itens.push({ rotulo: '🎯 RECENTRALIZAR VISÃO',
     acao: () => { recentrarVisao(); fecharMenu(); } });
   itens.push({ rotulo: '🔁 INVERTER SENTIDO',
@@ -1125,6 +1270,7 @@ function acaoGatilho(){
   if (!podeAcionar()) return;
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ menuConfirmar(); return; }
+  if (estado.pouso.ativo){ alternarInterior(); return; } // pousado: superfície ↔ interior
   if (estado.passeio.ativo || estado.zodiaco.ativo){ avancarTour(); return; }
   disparar();
 }
@@ -1171,6 +1317,13 @@ function abrirFicha(ud){
   tabela.innerHTML = linhas
     .map(([k, v]) => `<tr><td>${k}</td><td>${v}</td></tr>`).join('');
   cur.textContent = '» ' + d.curiosidade;
+  // Pousar: disponível para planetas (nos gasosos vira mergulho atmosférico)
+  const btnPousar = document.getElementById('btnPousar');
+  btnPousar.style.display = (ud.tipo === 'planeta') ? '' : 'none';
+  if (ud.tipo === 'planeta' && INTERIOR_NASA[d.nome]){
+    btnPousar.textContent = INTERIOR_NASA[d.nome].pousavel
+      ? '🛬 POUSAR NO PLANETA' : '🌫 MERGULHAR NA ATMOSFERA';
+  }
   elModal.classList.add('aberto');
   // Narração por voz da ficha
   if (ud.tipo === 'planeta'){
@@ -1247,6 +1400,8 @@ function mostrarParada(){
   const infoLuas = ehSol ? '☀️ Estrela central · 8 planetas'
     : `🌙 Luas: ${p.luas}` + (p.tipo ? ` · ${p.tipo}` : '');
   const titulo = `${p.icone} ${p.nome.toUpperCase()} · ${num}/9`;
+  // Pousar só faz sentido nos planetas (não no Sol)
+  document.getElementById('btnPousarPasseio').style.display = ehSol ? 'none' : '';
   document.getElementById('legNome').textContent = titulo;
   document.getElementById('legTexto').innerHTML =
     `${infoLuas}<br>» ${p.curiosidade}`;
@@ -1264,6 +1419,7 @@ function mostrarParada(){
 }
 function iniciarPasseio(){
   limparSelecao();
+  decolar();
   encerrarZodiaco();
   estado.passeio.ativo = true;
   estado.passeio.indice = -1;
@@ -1324,7 +1480,9 @@ function mostrarConstelacao(){
 }
 function iniciarZodiaco(){
   limparSelecao();
+  decolar();
   encerrarPasseio();
+  document.getElementById('btnPousarPasseio').style.display = 'none'; // sem pouso em constelações
   estado.zodiaco.ativo = true;
   estado.zodiaco.indice = 0;
   estado.zodiaco.tempoParada = 0;
@@ -1366,6 +1524,183 @@ document.getElementById('btnProximaParada').addEventListener('click', () => avan
 document.getElementById('btnSairPasseio').addEventListener('click', () => encerrarTours());
 
 /* ============================================================
+   10d. POUSO E INTERIOR DO PLANETA (dados NASA)
+   ------------------------------------------------------------
+   Com um planeta enquadrado (ficha técnica, parada do passeio
+   ou planeta mais próximo), o botão 🛬 POUSAR leva a câmera
+   até a superfície — sempre mantendo o planeta enquadrado.
+   Pousado, 🔬 VER INTERIOR troca o planeta por um corte
+   transversal mostrando as camadas internas segundo a NASA.
+   Nos gasosos, sem chão, o pouso vira mergulho atmosférico.
+   Gatilho/toque alternam superfície ↔ interior · Esc decola.
+   ============================================================ */
+const elPainelPouso = document.getElementById('painelPouso');
+
+function planetaPorDados(d){ return planetas.find(p => p.dados === d) || null; }
+function planetaMaisProximo(){
+  let melhor = null, dMin = Infinity;
+  const pv = new THREE.Vector3();
+  for (const p of planetas){
+    p.mesh.getWorldPosition(pv);
+    const d = pv.distanceTo(camera.position);
+    if (d < dMin){ dMin = d; melhor = p; }
+  }
+  return melhor;
+}
+// Qual planeta está "enquadrado" agora? (para o item do menu)
+function planetaPousavel(){
+  if (estado.selecionado && estado.selecionado.userData.tipo === 'planeta')
+    return planetaPorDados(estado.selecionado.userData.dados);
+  if (estado.passeio.ativo && estado.passeio.indice >= 0)
+    return planetas[estado.passeio.indice];
+  return planetaMaisProximo();
+}
+
+function sombrear(hex, fator){ // escurece uma cor #rrggbb
+  const n = parseInt(hex.slice(1), 16);
+  const f = c => Math.round(c * fator);
+  return `rgb(${f(n>>16 & 255)},${f(n>>8 & 255)},${f(n & 255)})`;
+}
+
+/* Corte transversal: metade do planeta (com a textura real) +
+   disco com os anéis concêntricos das camadas, como nos
+   diagramas de estrutura interna da NASA. */
+function criarCorteInterior(p){
+  const d = p.dados, info = INTERIOR_NASA[d.nome];
+  const grupo = new THREE.Group();
+
+  // Hemisfério externo com o material da superfície (ocupa z ≤ 0)
+  grupo.add(new THREE.Mesh(
+    new THREE.SphereGeometry(d.raio * 1.001, 40, 28, Math.PI, Math.PI),
+    p.mesh.material));
+
+  // Disco do corte: camadas desenhadas de fora para dentro
+  const tex = novaTextura(1024, (ctx, px) => {
+    const cx = px/2, cy = px/2, R = px/2 - 8;
+    info.camadas.forEach(cam => {
+      const r = cam.fracVis * R;
+      const g = ctx.createRadialGradient(cx, cy, r * 0.55, cx, cy, r);
+      g.addColorStop(0, cam.cor);
+      g.addColorStop(1, sombrear(cam.cor, 0.7));
+      ctx.fillStyle = g;
+      ctx.beginPath(); ctx.arc(cx, cy, r, 0, 7); ctx.fill();
+      ctx.strokeStyle = 'rgba(0,0,0,.35)'; ctx.lineWidth = 3; ctx.stroke();
+    });
+    // Nome de cada camada sobre a sua faixa
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.font = 'bold 36px "Courier New", monospace';
+    info.camadas.forEach((cam, i) => {
+      const interna = info.camadas[i+1] ? info.camadas[i+1].fracVis : 0;
+      const rMid = (cam.fracVis + interna) / 2 * R;
+      const ang = -0.7 + i * 0.5;                 // espalha os rótulos
+      const x = cx + Math.cos(ang) * rMid;
+      const y = cy + Math.sin(ang) * rMid;
+      ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,.8)';
+      ctx.strokeText(cam.nome, x, y);
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(cam.nome, x, y);
+    });
+  });
+  const disco = new THREE.Mesh(
+    new THREE.CircleGeometry(d.raio * 0.998, 48),
+    new THREE.MeshBasicMaterial({ map: tex })); // basic: sempre legível
+  grupo.add(disco);
+
+  grupo.visible = false;
+  p.grupo.add(grupo);
+  return grupo;
+}
+
+function atualizarPainelPouso(){
+  const p = estado.pouso.planeta;
+  if (!p) return;
+  const info = INTERIOR_NASA[p.dados.nome];
+  const interior = estado.pouso.interior;
+  elPainelPouso.classList.toggle('interior', interior);
+  document.getElementById('pousoNome').textContent = interior
+    ? `🔬 INTERIOR DE ${p.dados.nome.toUpperCase()}`
+    : `${info.pousavel ? '🛬 POUSO EM' : '🌫 MERGULHO EM'} ${p.dados.nome.toUpperCase()}`;
+  document.getElementById('pousoTexto').textContent = interior
+    ? 'Corte transversal com as camadas internas, segundo a NASA:'
+    : '» ' + info.superficie;
+  document.getElementById('pousoCamadas').innerHTML = interior
+    ? info.camadas.map(c =>
+        `<div class="camada"><span class="cor" style="background:${c.cor}"></span>` +
+        `<span><b>${c.nome.toUpperCase()}</b> — ${c.desc}</span></div>`).join('')
+    : '';
+  document.getElementById('btnInterior').textContent =
+    interior ? '🏔 VER SUPERFÍCIE' : '🔬 VER INTERIOR';
+  // Versão 3D do painel para o modo VR
+  desenharLegenda3D(
+    interior ? `INTERIOR · ${p.dados.nome.toUpperCase()}`
+             : `${info.pousavel ? 'POUSO' : 'MERGULHO'} · ${p.dados.nome.toUpperCase()}`,
+    interior ? info.camadas.map(c => c.nome).join(' · ') + '. Fonte: NASA.'
+             : info.superficie);
+  legenda3D.visible = estado.vr;
+}
+
+function pousarEm(p){
+  if (!p || !INTERIOR_NASA[p.dados.nome]) return;
+  limparSelecao();
+  encerrarTours();
+  estado.pouso.ativo = true;
+  estado.pouso.planeta = p;
+  estado.pouso.interior = false;
+  document.body.classList.add('pouso');
+  atualizarPainelPouso();
+  const info = INTERIOR_NASA[p.dados.nome];
+  somSelecao();
+  avisar(`${info.pousavel ? '🛬 Pousando em' : '🌫 Mergulhando em'} ${p.dados.nome}…`);
+  narrar(`${info.pousavel ? 'Pousando em' : 'Mergulhando na atmosfera de'} ${p.dados.nome}. ${info.superficie}`);
+}
+
+function alternarInterior(){
+  if (!estado.pouso.ativo) return;
+  const p = estado.pouso.planeta;
+  estado.pouso.interior = !estado.pouso.interior;
+  if (estado.pouso.interior){
+    if (!p.corte) p.corte = criarCorteInterior(p); // criado uma vez, reutilizado
+    p.corte.visible = true;
+    p.mesh.visible = false;
+    const info = INTERIOR_NASA[p.dados.nome];
+    narrar(`Interior de ${p.dados.nome}, segundo a NASA. ` +
+      info.camadas.map(c => `${c.nome}: ${c.desc}`).join(' '));
+  } else {
+    if (p.corte) p.corte.visible = false;
+    p.mesh.visible = true;
+    silenciar();
+  }
+  somSelecao();
+  atualizarPainelPouso();
+}
+
+function decolar(){
+  if (!estado.pouso.ativo) return;
+  const p = estado.pouso.planeta;
+  if (p.corte) p.corte.visible = false;
+  p.mesh.visible = true;
+  estado.pouso.ativo = false;
+  estado.pouso.interior = false;
+  estado.pouso.planeta = null;
+  document.body.classList.remove('pouso');
+  legenda3D.visible = false;
+  silenciar();
+  avisar('🚀 Decolando…');
+}
+
+// Botões: ficha técnica, legenda do passeio e painel de pouso
+document.getElementById('btnPousar').addEventListener('click', () => {
+  if (estado.selecionado && estado.selecionado.userData.tipo === 'planeta')
+    pousarEm(planetaPorDados(estado.selecionado.userData.dados));
+});
+document.getElementById('btnPousarPasseio').addEventListener('click', () => {
+  if (estado.passeio.ativo && estado.passeio.indice >= 0)
+    pousarEm(planetas[estado.passeio.indice]);
+});
+document.getElementById('btnInterior').addEventListener('click', () => alternarInterior());
+document.getElementById('btnDecolar').addEventListener('click', () => decolar());
+
+/* ============================================================
    11. TOQUE / ARRASTO / CLIQUE (fallback sem giroscópio)
    ============================================================ */
 let ptrAtivo = false, ptrX = 0, ptrY = 0, ptrMoveu = false;
@@ -1389,6 +1724,7 @@ addEventListener('pointerup', e => {
   if (!podeAcionar()) return; // anti-duplo (gatilho também gera clique)
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ if (estado.vr) menuConfirmar(); return; } // fora do VR o menu é DOM
+  if (estado.pouso.ativo){ if (estado.vr) alternarInterior(); return; } // fora do VR usa os botões
   if (estado.passeio.ativo || estado.zodiaco.ativo){ avancarTour(); return; } // toque avança o tour
   // Toque simples: tenta selecionar objeto sob o dedo/cursor
   const nd = new THREE.Vector2(
@@ -1469,11 +1805,16 @@ addEventListener('keydown', e => {
     case 'ArrowDown': case 'ArrowLeft':
       estado.velocidade = Math.max(.1, estado.velocidade - .1); break;
     case 'Backspace': case 'Escape':
-      if (estado.selecionado){ limparSelecao(); }
+      if (estado.pouso.ativo){ decolar(); }
+      else if (estado.selecionado){ limparSelecao(); }
       else estado.direcao *= -1;
       break;
     case 'KeyR': reiniciarCamera(); break;
     case 'KeyN': avancarTour(); break;
+    case 'KeyP': // pousar no planeta enquadrado / decolar
+      estado.pouso.ativo ? decolar() : pousarEm(planetaPousavel()); break;
+    case 'KeyI': // ver interior (dados NASA) quando pousado
+      if (estado.pouso.ativo) alternarInterior(); break;
   }
   atualizarHUD();
 });
@@ -1591,7 +1932,8 @@ async function entrarVR(){
   estado.vr = true;
   document.body.classList.add('vr');
   reticulo3D.visible = true;
-  legenda3D.visible = estado.passeio.ativo || estado.zodiaco.ativo;
+  legenda3D.visible = estado.passeio.ativo || estado.zodiaco.ativo || estado.pouso.ativo;
+  if (estado.pouso.ativo) atualizarPainelPouso(); // redesenha a legenda 3D do pouso
   quatReferencia = null; // recentraliza olhar
   await ativarGiroscopio();
   try{ await document.documentElement.requestFullscreen(); }
@@ -1687,7 +2029,8 @@ function animar(){
 
   // --- Planetas: órbita + rotação própria; luas em tempo real ---
   for (const p of planetas){
-    if (!estado.pausado){
+    // O planeta onde estamos pousados fica parado na órbita (estabilidade)
+    if (!estado.pausado && !(estado.pouso.ativo && estado.pouso.planeta === p)){
       p.angulo += p.velOrbita * estado.velocidade * estado.direcao * dt;
     }
     p.grupo.position.set(
@@ -1706,7 +2049,30 @@ function animar(){
 
   // --- Câmera orbital ---
   let posDesejada, alvoDesejado;
-  if (estado.zodiaco.ativo){
+  if (estado.pouso.ativo){
+    // POUSO: câmera rente à superfície (ou diante do corte do interior),
+    // sempre olhando para o centro — o planeta fica sempre enquadrado.
+    const p = estado.pouso.planeta;
+    p.mesh.getWorldPosition(_vTmp);
+    const r = p.dados.raio;
+    const radial = _vTmp.clone().normalize(); // direção Sol → planeta (lado iluminado)
+    if (estado.pouso.interior){
+      // Afasta o bastante para enquadrar o corte inteiro
+      posDesejada = _vTmp.clone()
+        .addScaledVector(radial, r * 3.6)
+        .add(new THREE.Vector3(0, r * 0.5, 0));
+      if (p.corte) p.corte.lookAt(camera.position); // corte sempre de frente
+    } else {
+      // Rente ao chão, com uma deriva bem lenta (sobrevoo de pouso)
+      const a = performance.now() * 0.00008;
+      const lado = new THREE.Vector3(-radial.z, 0, radial.x);
+      posDesejada = _vTmp.clone()
+        .addScaledVector(radial, r * 1.34)
+        .addScaledVector(lado, Math.sin(a) * r * 0.25)
+        .add(new THREE.Vector3(0, r * 0.12 + Math.cos(a) * r * 0.15, 0));
+    }
+    alvoDesejado = _vTmp.clone();
+  } else if (estado.zodiaco.ativo){
     // PASSEIO PELO ZODÍACO: volta-se para a constelação da vez
     estado.zodiaco.tempoParada += dt;
     if (estado.zodiaco.tempoParada > 20) proximaConstelacao(); // avanço automático
@@ -1754,7 +2120,7 @@ function animar(){
     alvoDesejado = new THREE.Vector3(0, 0, 0); // sempre olhando o Sol
   }
   // Transições suaves; no passeio a viagem é mais cinematográfica (lenta)
-  const suavidade = (estado.passeio.ativo || estado.zodiaco.ativo)
+  const suavidade = (estado.passeio.ativo || estado.zodiaco.ativo || estado.pouso.ativo)
     ? Math.pow(0.30, dt) : Math.pow(0.02, dt);
   estado.posCamera.lerp(posDesejada, 1 - suavidade);
   estado.alvoOlhar.lerp(alvoDesejado, 1 - suavidade);
