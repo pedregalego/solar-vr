@@ -559,6 +559,187 @@ viaLactea.rotation.z = 0.5;
 cena.add(viaLactea);
 
 /* ============================================================
+   4b. CÉU REAL — ESTRELAS BRILHANTES E CONSTELAÇÕES
+   ------------------------------------------------------------
+   Posições reais (J2000): ascensão reta em horas, declinação
+   em graus, magnitude aparente. Projetadas na esfera celeste.
+   ============================================================ */
+const RAIO_CEU = 470;
+function posCeleste(raHoras, decGraus, raio = RAIO_CEU){
+  const ra = THREE.MathUtils.degToRad(raHoras * 15);
+  const dec = THREE.MathUtils.degToRad(decGraus);
+  return new THREE.Vector3(
+    raio * Math.cos(dec) * Math.cos(ra),
+    raio * Math.sin(dec),
+    -raio * Math.cos(dec) * Math.sin(ra));
+}
+function spriteTexto(texto, cor, escala, fonte = 44){
+  const c = document.createElement('canvas');
+  c.width = 512; c.height = 128;
+  const ctx = c.getContext('2d');
+  ctx.font = `bold ${fonte}px "Courier New", monospace`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  ctx.shadowColor = cor; ctx.shadowBlur = 16;
+  ctx.fillStyle = cor;
+  ctx.fillText(texto, 256, 64);
+  const sp = new THREE.Sprite(new THREE.SpriteMaterial({
+    map: new THREE.CanvasTexture(c), transparent:true, depthWrite:false }));
+  sp.scale.set(escala, escala/4, 1);
+  return sp;
+}
+
+// --- As 12 constelações do zodíaco ---
+// estrelas: [RA(h), Dec(°), magnitude] · linhas: pares de índices
+const ZODIACO = [
+ { nome:'Áries', simbolo:'♈', datas:'21/03 a 19/04', brilhante:'Hamal',
+   curiosidade:'Hamal, sua estrela mais brilhante, marcava o equinócio de primavera na Antiguidade.',
+   estrelas:[[2.12,23.5,2.0],[1.91,20.8,2.6],[1.89,19.3,3.9],[2.83,27.3,3.6]],
+   linhas:[[2,1],[1,0],[0,3]] },
+ { nome:'Touro', simbolo:'♉', datas:'20/04 a 20/05', brilhante:'Aldebaran',
+   curiosidade:'Abriga Aldebaran, o olho do touro, e o aglomerado das Plêiades, o Sete-estrelo.',
+   estrelas:[[4.60,16.5,0.9],[5.44,28.6,1.7],[4.33,15.6,3.6],[4.01,12.5,3.4],
+             [4.48,19.2,3.5],[5.63,21.1,3.0],[3.79,24.1,2.9]],
+   linhas:[[3,2],[2,0],[2,4],[4,1],[0,5]] },
+ { nome:'Gêmeos', simbolo:'♊', datas:'21/05 a 20/06', brilhante:'Pólux',
+   curiosidade:'Castor e Pólux marcam as cabeças dos gêmeos da mitologia grega.',
+   estrelas:[[7.58,31.9,1.6],[7.76,28.0,1.1],[6.63,16.4,1.9],[6.73,25.1,3.0],
+             [6.38,22.5,2.9],[7.34,22.0,3.5]],
+   linhas:[[0,1],[0,3],[3,4],[1,5],[5,2]] },
+ { nome:'Câncer', simbolo:'♋', datas:'21/06 a 22/07', brilhante:'Altarf',
+   curiosidade:'A mais apagada do zodíaco; abriga o aglomerado do Presépio, visível com binóculos.',
+   estrelas:[[8.28,9.2,3.5],[8.74,18.2,3.9],[8.78,28.8,4.0],[8.97,11.9,4.3],[8.72,21.5,4.7]],
+   linhas:[[2,4],[4,1],[1,0],[1,3]] },
+ { nome:'Leão', simbolo:'♌', datas:'23/07 a 22/08', brilhante:'Regulus',
+   curiosidade:'Regulus, o coração do leão, fica quase exatamente sobre o caminho do Sol no céu.',
+   estrelas:[[10.14,12.0,1.4],[11.82,14.6,2.1],[10.33,19.8,2.0],[11.24,20.5,2.6],
+             [9.76,23.8,3.0],[10.28,23.4,3.4],[11.24,15.4,3.3],[10.12,16.8,3.5]],
+   linhas:[[0,7],[7,2],[2,5],[5,4],[2,3],[3,1],[1,6],[6,0]] },
+ { nome:'Virgem', simbolo:'♍', datas:'23/08 a 22/09', brilhante:'Spica',
+   curiosidade:'A maior constelação do zodíaco; Spica é uma das estrelas mais quentes visíveis a olho nu.',
+   estrelas:[[13.42,-11.2,1.0],[12.69,-1.4,2.7],[13.04,11.0,2.8],[12.93,3.4,3.4],
+             [11.84,1.8,3.6],[12.33,-0.7,3.9],[13.58,-0.6,3.4]],
+   linhas:[[4,5],[5,1],[1,3],[3,2],[1,0],[0,6]] },
+ { nome:'Libra', simbolo:'♎', datas:'23/09 a 22/10', brilhante:'Zubeneschamali',
+   curiosidade:'A única do zodíaco que representa um objeto: a balança da justiça.',
+   estrelas:[[14.85,-16.0,2.8],[15.28,-9.4,2.6],[15.59,-14.8,3.9],[15.07,-25.3,3.3]],
+   linhas:[[0,1],[1,2],[2,0],[0,3]] },
+ { nome:'Escorpião', simbolo:'♏', datas:'23/10 a 21/11', brilhante:'Antares',
+   curiosidade:'Antares, o rival de Marte, é uma supergigante vermelha centenas de vezes maior que o Sol.',
+   estrelas:[[16.49,-26.4,1.1],[16.09,-19.8,2.6],[16.00,-22.6,2.3],[15.98,-26.1,2.9],
+             [16.60,-28.2,2.8],[16.84,-34.3,2.3],[16.87,-38.0,3.0],[17.62,-43.0,1.9],
+             [17.71,-39.0,2.4],[17.56,-37.1,1.6]],
+   linhas:[[1,2],[3,2],[2,0],[0,4],[4,5],[5,6],[6,7],[7,8],[8,9]] },
+ { nome:'Sagitário', simbolo:'♐', datas:'22/11 a 21/12', brilhante:'Kaus Australis',
+   curiosidade:'Aponta para o centro da Via Láctea, onde vive um buraco negro supermassivo.',
+   estrelas:[[18.40,-34.4,1.9],[18.92,-26.3,2.0],[19.04,-29.9,2.6],[18.35,-29.8,2.7],
+             [18.47,-25.4,2.8],[18.10,-30.4,3.0],[18.76,-27.0,3.2],[19.12,-27.7,3.3]],
+   linhas:[[5,3],[3,0],[0,2],[2,6],[6,3],[6,1],[1,7],[7,2],[4,3],[4,6]] },
+ { nome:'Capricórnio', simbolo:'♑', datas:'22/12 a 19/01', brilhante:'Deneb Algedi',
+   curiosidade:'Uma das constelações mais antigas registradas, já aparecia em tábuas da Babilônia.',
+   estrelas:[[20.30,-12.5,3.6],[20.35,-14.8,3.1],[21.78,-16.1,2.9],[21.67,-16.7,3.7],
+             [21.10,-17.2,4.1],[20.86,-26.9,4.1],[21.44,-22.4,3.7]],
+   linhas:[[0,1],[1,5],[5,6],[6,2],[2,3],[3,4],[4,1]] },
+ { nome:'Aquário', simbolo:'♒', datas:'20/01 a 18/02', brilhante:'Sadalsuud',
+   curiosidade:'Região do céu que os antigos chamavam de Mar, cheia de constelações aquáticas.',
+   estrelas:[[21.53,-5.6,2.9],[22.10,-0.3,3.0],[22.36,-1.4,3.8],[22.91,-15.8,3.3],
+             [22.88,-7.6,3.7],[20.79,-9.5,3.8],[22.48,0.0,4.3]],
+   linhas:[[5,0],[0,1],[1,2],[2,6],[6,4],[4,3]] },
+ { nome:'Peixes', simbolo:'♓', datas:'19/02 a 20/03', brilhante:'Alrescha',
+   curiosidade:'Hoje abriga o ponto vernal: onde o Sol cruza o equador celeste em março.',
+   estrelas:[[23.29,3.3,3.7],[23.47,6.4,4.3],[23.67,5.6,4.1],[23.99,6.9,4.0],
+             [2.03,2.8,3.8],[1.75,9.2,4.3],[1.52,15.3,3.6]],
+   linhas:[[0,1],[1,2],[2,3],[3,0],[3,4],[4,5],[5,6]] }
+];
+// Constelações extras (não fazem parte do tour, enriquecem o céu)
+const CONSTELACOES_EXTRAS = [
+ { nome:'Órion',
+   estrelas:[[5.92,7.4,0.4],[5.24,-8.2,0.1],[5.42,6.3,1.6],[5.80,-9.7,2.1],
+             [5.68,-1.9,1.8],[5.60,-1.2,1.7],[5.53,-0.3,2.2]],
+   linhas:[[0,2],[2,6],[6,5],[5,4],[4,3],[3,1],[1,6],[0,4]] },
+ { nome:'Cruzeiro do Sul',
+   estrelas:[[12.44,-63.1,0.8],[12.79,-59.7,1.3],[12.52,-57.1,1.6],[12.25,-58.7,2.8]],
+   linhas:[[0,2],[1,3]] }
+];
+// Estrelas famosas avulsas (as mais brilhantes do céu)
+const ESTRELAS_FAMOSAS = [
+ ['Sírius',6.75,-16.7,-1.5],['Canopus',6.40,-52.7,-0.7],['Alfa Centauri',14.66,-60.8,-0.3],
+ ['Arcturus',14.26,19.2,0.0],['Vega',18.62,38.8,0.0],['Capella',5.28,46.0,0.1],
+ ['Procyon',7.66,5.2,0.3],['Achernar',1.63,-57.2,0.5],['Altair',19.85,8.9,0.8],
+ ['Deneb',20.69,45.3,1.3],['Fomalhaut',22.96,-29.6,1.2],['Polaris',2.53,89.3,2.0]
+];
+
+const grupoCeu = new THREE.Group();
+cena.add(grupoCeu);
+const constelacoes = []; // { nome, matLinha, rotulo, centro } — p/ destaque no tour
+
+function construirConstelacao(c, ehZodiaco){
+  const pontos3D = c.estrelas.map(e => posCeleste(e[0], e[1]));
+  // Estrelas da constelação (pontos brilhantes)
+  const geoP = new THREE.BufferGeometry().setFromPoints(pontos3D);
+  grupoCeu.add(new THREE.Points(geoP, new THREE.PointsMaterial({
+    color:0xffffff, size:5, sizeAttenuation:false, // tamanho fixo em pixels
+    transparent:true, opacity:.95, depthWrite:false })));
+  // Malha de linhas
+  const segmentos = [];
+  for (const [a, b] of c.linhas) segmentos.push(pontos3D[a], pontos3D[b]);
+  const matLinha = new THREE.LineBasicMaterial({
+    color: ehZodiaco ? 0x00f7ff : 0x3a6a7a,
+    transparent:true, opacity: ehZodiaco ? .30 : .20 });
+  grupoCeu.add(new THREE.LineSegments(
+    new THREE.BufferGeometry().setFromPoints(segmentos), matLinha));
+  // Rótulo no centro
+  const centro = pontos3D.reduce((s, p) => s.add(p), new THREE.Vector3())
+    .divideScalar(pontos3D.length).normalize().multiplyScalar(RAIO_CEU * .94);
+  const rotulo = spriteTexto(
+    (c.simbolo ? c.simbolo + ' ' : '') + c.nome.toUpperCase(),
+    ehZodiaco ? '#7adfe8' : '#4a7a8a', 34);
+  rotulo.material.opacity = .55;
+  rotulo.position.copy(centro);
+  grupoCeu.add(rotulo);
+  const registro = { nome:c.nome, matLinha, rotulo, centro:centro.clone().normalize() };
+  constelacoes.push(registro);
+  return registro;
+}
+ZODIACO.forEach(c => construirConstelacao(c, true));
+CONSTELACOES_EXTRAS.forEach(c => construirConstelacao(c, false));
+
+// Estrelas famosas: brilho + nome
+const texEstrela = texturaRadial('rgba(255,255,255,1)', 'rgba(180,220,255,0)');
+for (const [nome, ra, dec, mag] of ESTRELAS_FAMOSAS){
+  const p = posCeleste(ra, dec);
+  const brilho = new THREE.Sprite(new THREE.SpriteMaterial({
+    map:texEstrela, transparent:true, depthWrite:false,
+    blending:THREE.AdditiveBlending }));
+  const t = 10 - mag * 3; // mais brilhante = maior
+  brilho.scale.set(t, t, 1);
+  brilho.position.copy(p);
+  grupoCeu.add(brilho);
+  const rot = spriteTexto(nome, '#c8ecff', 26, 38);
+  rot.material.opacity = .6;
+  rot.position.copy(p).multiplyScalar(.965);
+  grupoCeu.add(rot);
+}
+
+// Linha da ECLÍPTICA: o caminho do Sol pelo zodíaco (inclinação 23,44°)
+{
+  const eps = THREE.MathUtils.degToRad(23.44);
+  const pts = [];
+  for (let g = 0; g <= 360; g += 3){
+    const lam = THREE.MathUtils.degToRad(g);
+    const dec = Math.asin(Math.sin(eps) * Math.sin(lam));
+    const ra = Math.atan2(Math.sin(lam) * Math.cos(eps), Math.cos(lam));
+    pts.push(posCeleste(THREE.MathUtils.radToDeg(ra) / 15, THREE.MathUtils.radToDeg(dec)));
+  }
+  grupoCeu.add(new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({ color:0xff00ff, transparent:true, opacity:.22 })));
+  const rotEcl = spriteTexto('· ECLÍPTICA ·', '#ff7aff', 30);
+  rotEcl.material.opacity = .5;
+  rotEcl.position.copy(posCeleste(6.6, 23.0, RAIO_CEU * .97));
+  grupoCeu.add(rotEcl);
+}
+
+/* ============================================================
    5. SOL (com pulsação e corona)
    ============================================================ */
 const sol = new THREE.Mesh(
@@ -699,6 +880,7 @@ const estado = {
   disparos: 0,
   selecionado: null, tempoSelecao: 0,
   passeio: { ativo:false, indice:-1, tempoParada:0 }, // -1 = Sol, 0..7 = planetas
+  zodiaco: { ativo:false, indice:0, tempoParada:0 },   // 0..11 = Áries..Peixes
   alvoOlhar: new THREE.Vector3(0,0,0),  // suavizado
   posCamera: new THREE.Vector3(46,14,0)
 };
@@ -841,10 +1023,12 @@ const menu = { aberto:false, indice:0 };
 
 function itensMenu(){
   const itens = [];
-  itens.push({ rotulo: estado.passeio.ativo ? '✕ ENCERRAR PASSEIO' : '🚀 PASSEIO GUIADO',
+  itens.push({ rotulo: estado.passeio.ativo ? '✕ ENCERRAR PASSEIO' : '🚀 PASSEIO PELOS PLANETAS',
     acao: () => { estado.passeio.ativo ? encerrarPasseio() : iniciarPasseio(); fecharMenu(); } });
+  itens.push({ rotulo: estado.zodiaco.ativo ? '✕ ENCERRAR ZODÍACO' : '✨ PASSEIO PELO ZODÍACO',
+    acao: () => { estado.zodiaco.ativo ? encerrarZodiaco() : iniciarZodiaco(); fecharMenu(); } });
   itens.push({ rotulo: '🧭 EXPLORAÇÃO LIVRE',
-    acao: () => { encerrarPasseio(); fecharMenu(); } });
+    acao: () => { encerrarTours(); fecharMenu(); } });
   itens.push({ rotulo: '🎯 RECENTRALIZAR VISÃO',
     acao: () => { recentrarVisao(); fecharMenu(); } });
   itens.push({ rotulo: '🔁 INVERTER SENTIDO',
@@ -941,7 +1125,7 @@ function acaoGatilho(){
   if (!podeAcionar()) return;
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ menuConfirmar(); return; }
-  if (estado.passeio.ativo){ proximaParada(); return; }
+  if (estado.passeio.ativo || estado.zodiaco.ativo){ avancarTour(); return; }
   disparar();
 }
 
@@ -1080,6 +1264,7 @@ function mostrarParada(){
 }
 function iniciarPasseio(){
   limparSelecao();
+  encerrarZodiaco();
   estado.passeio.ativo = true;
   estado.passeio.indice = -1;
   estado.passeio.tempoParada = 0;
@@ -1106,10 +1291,79 @@ function proximaParada(){
   estado.passeio.tempoParada = 0;
   mostrarParada();
 }
+
+/* ============================================================
+   10c. PASSEIO PELO ZODÍACO — Áries a Peixes
+   ------------------------------------------------------------
+   A câmera se volta para cada constelação zodiacal em ordem,
+   destacando sua malha em magenta e narrando as curiosidades.
+   Mesmos controles do passeio planetário.
+   ============================================================ */
+function destacarConstelacao(indice){
+  constelacoes.forEach((c, i) => {
+    const ativa = (i === indice);
+    const ehZodiaco = i < ZODIACO.length;
+    c.matLinha.color.set(ativa ? 0xff00ff : (ehZodiaco ? 0x00f7ff : 0x3a6a7a));
+    c.matLinha.opacity = ativa ? .95 : (ehZodiaco ? .30 : .20);
+    c.rotulo.material.opacity = ativa ? 1 : .55;
+  });
+}
+function mostrarConstelacao(){
+  const z = ZODIACO[estado.zodiaco.indice];
+  const num = estado.zodiaco.indice + 1;
+  destacarConstelacao(estado.zodiaco.indice);
+  document.getElementById('legNome').textContent =
+    `${z.simbolo} ${z.nome.toUpperCase()} · ${num}/12`;
+  document.getElementById('legTexto').innerHTML =
+    `☀️ Sol no signo: ${z.datas} · ⭐ ${z.brilhante}<br>» ${z.curiosidade}`;
+  desenharLegenda3D(`${z.simbolo} ${z.nome.toUpperCase()} · ${num}/12`,
+    `${z.datas} · ${z.brilhante}. ${z.curiosidade}`);
+  somSelecao();
+  narrar(`${z.nome}. O Sol passa por este signo de ${z.datas.replace(' a ', ' até ')}. ` +
+         `Sua estrela mais brilhante é ${z.brilhante}. ${z.curiosidade}`);
+}
+function iniciarZodiaco(){
+  limparSelecao();
+  encerrarPasseio();
+  estado.zodiaco.ativo = true;
+  estado.zodiaco.indice = 0;
+  estado.zodiaco.tempoParada = 0;
+  document.body.classList.add('passeio'); // reaproveita a legenda
+  legenda3D.visible = estado.vr;
+  btnPasseio.textContent = '✕ FIM';
+  mostrarConstelacao();
+}
+function encerrarZodiaco(){
+  if (!estado.zodiaco.ativo) return;
+  silenciar();
+  estado.zodiaco.ativo = false;
+  destacarConstelacao(-1);
+  document.body.classList.remove('passeio');
+  legenda3D.visible = false;
+  btnPasseio.textContent = '🚀 PASSEIO';
+}
+function proximaConstelacao(){
+  if (!estado.zodiaco.ativo) return;
+  if (estado.zodiaco.indice >= ZODIACO.length - 1){
+    encerrarZodiaco();
+    avisar('✨ Fim do passeio! Você percorreu todo o zodíaco.');
+    return;
+  }
+  estado.zodiaco.indice++;
+  estado.zodiaco.tempoParada = 0;
+  mostrarConstelacao();
+}
+/* Roteia o avanço conforme o tour ativo */
+function avancarTour(){
+  if (estado.zodiaco.ativo) proximaConstelacao();
+  else proximaParada();
+}
+function encerrarTours(){ encerrarPasseio(); encerrarZodiaco(); }
+
 btnPasseio.addEventListener('click', () =>
-  estado.passeio.ativo ? encerrarPasseio() : iniciarPasseio());
-document.getElementById('btnProximaParada').addEventListener('click', proximaParada);
-document.getElementById('btnSairPasseio').addEventListener('click', encerrarPasseio);
+  (estado.passeio.ativo || estado.zodiaco.ativo) ? encerrarTours() : iniciarPasseio());
+document.getElementById('btnProximaParada').addEventListener('click', () => avancarTour());
+document.getElementById('btnSairPasseio').addEventListener('click', () => encerrarTours());
 
 /* ============================================================
    11. TOQUE / ARRASTO / CLIQUE (fallback sem giroscópio)
@@ -1135,7 +1389,7 @@ addEventListener('pointerup', e => {
   if (!podeAcionar()) return; // anti-duplo (gatilho também gera clique)
   if (estado.fase === 'calibra'){ concluirCalibracao(); return; }
   if (menu.aberto){ if (estado.vr) menuConfirmar(); return; } // fora do VR o menu é DOM
-  if (estado.passeio.ativo){ proximaParada(); return; } // toque avança o passeio
+  if (estado.passeio.ativo || estado.zodiaco.ativo){ avancarTour(); return; } // toque avança o tour
   // Toque simples: tenta selecionar objeto sob o dedo/cursor
   const nd = new THREE.Vector2(
     (e.clientX / innerWidth) * 2 - 1,
@@ -1219,7 +1473,7 @@ addEventListener('keydown', e => {
       else estado.direcao *= -1;
       break;
     case 'KeyR': reiniciarCamera(); break;
-    case 'KeyN': proximaParada(); break;
+    case 'KeyN': avancarTour(); break;
   }
   atualizarHUD();
 });
@@ -1337,7 +1591,7 @@ async function entrarVR(){
   estado.vr = true;
   document.body.classList.add('vr');
   reticulo3D.visible = true;
-  legenda3D.visible = estado.passeio.ativo;
+  legenda3D.visible = estado.passeio.ativo || estado.zodiaco.ativo;
   quatReferencia = null; // recentraliza olhar
   await ativarGiroscopio();
   try{ await document.documentElement.requestFullscreen(); }
@@ -1452,7 +1706,14 @@ function animar(){
 
   // --- Câmera orbital ---
   let posDesejada, alvoDesejado;
-  if (estado.passeio.ativo){
+  if (estado.zodiaco.ativo){
+    // PASSEIO PELO ZODÍACO: volta-se para a constelação da vez
+    estado.zodiaco.tempoParada += dt;
+    if (estado.zodiaco.tempoParada > 20) proximaConstelacao(); // avanço automático
+    const dir = constelacoes[estado.zodiaco.indice].centro; // direção unitária
+    posDesejada = dir.clone().multiplyScalar(10);            // aproxima-se do céu
+    alvoDesejado = dir.clone().multiplyScalar(RAIO_CEU);     // mira a constelação
+  } else if (estado.passeio.ativo){
     // PASSEIO GUIADO: viaja até bem perto do astro e orbita devagar
     estado.passeio.tempoParada += dt;
     if (estado.passeio.tempoParada > 18) proximaParada(); // avanço automático
@@ -1493,7 +1754,8 @@ function animar(){
     alvoDesejado = new THREE.Vector3(0, 0, 0); // sempre olhando o Sol
   }
   // Transições suaves; no passeio a viagem é mais cinematográfica (lenta)
-  const suavidade = estado.passeio.ativo ? Math.pow(0.30, dt) : Math.pow(0.02, dt);
+  const suavidade = (estado.passeio.ativo || estado.zodiaco.ativo)
+    ? Math.pow(0.30, dt) : Math.pow(0.02, dt);
   estado.posCamera.lerp(posDesejada, 1 - suavidade);
   estado.alvoOlhar.lerp(alvoDesejado, 1 - suavidade);
   camera.position.copy(estado.posCamera);

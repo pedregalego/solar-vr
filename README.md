@@ -35,6 +35,15 @@ voz do próprio aparelho (Web Speech API). Liga/desliga no menu
 ("🔊 NARRAÇÃO"). No Android, a qualidade depende do mecanismo de
 texto-para-voz instalado (Google TTS recomendado).
 
+## ✨ Céu real e passeio pelo zodíaco
+
+O céu de fundo inclui as **estrelas mais brilhantes com posições astronômicas
+reais** (Sírius, Canopus, Alfa Centauri, Vega…), a **malha das 12 constelações
+do zodíaco** (+ Órion e Cruzeiro do Sul), a linha magenta da **eclíptica** — o
+caminho do Sol — e rótulos com os nomes. No menu, **✨ PASSEIO PELO ZODÍACO**
+percorre de Áries a Peixes: a constelação da vez acende em magenta enquanto a
+narração conta as datas do signo, sua estrela mais brilhante e uma curiosidade.
+
 ## 🚀 Passeio guiado
 
 Toque em **🚀 PASSEIO** para iniciar um tour cinematográfico: a câmera parte do
